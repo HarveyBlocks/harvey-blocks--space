@@ -1,0 +1,5 @@
+{
+  "name": "Harvey Blocks' Space",
+  "description": "Harvey Blocks' personal digital garden and markdown reader, dynamically fetching content from GitHub.",
+  "requestFramePermissions": []
+}
