@@ -8,7 +8,6 @@ import rehypeRaw from 'rehype-raw';
 import rehypeSlug from 'rehype-slug';
 import { visit } from 'unist-util-visit';
 import { useNavigate } from 'react-router-dom';
-import "../style/MarkdownStyles.css"
 
 interface MarkdownRendererProps {
   content: string;
@@ -51,19 +50,19 @@ const resolveRelativePath = (baseFile: string, relativeUrl: string, isFolder: bo
   // Split base path into parts
   // Filter boolean removes empty strings from double slashes or start/end
   const baseDirParts = baseFile.split('/').filter(Boolean);
-
+  
   if (!isFolder) {
     // If it's a file path (e.g. a/b/c.md), the context is the folder (a/b)
-    baseDirParts.pop();
+    baseDirParts.pop(); 
   }
-
+  
   const relativeParts = normalizedUrl.split('/').filter(Boolean);
-
+  
   for (const part of relativeParts) {
     if (part === '.') {
       // Current directory, do nothing
       continue;
-    }
+    } 
     if (part === '..') {
       // Parent directory, pop from base
       if (baseDirParts.length > 0) {
@@ -74,7 +73,7 @@ const resolveRelativePath = (baseFile: string, relativeUrl: string, isFolder: bo
       baseDirParts.push(part);
     }
   }
-
+  
   return baseDirParts.join('/');
 };
 
@@ -119,9 +118,9 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content, fil
       // Note: We check for protocol. If it has a protocol, we treat it as external.
       if (!href || href.startsWith('http') || href.startsWith('https') || href.startsWith('mailto:')) {
         return (
-            <a href={href} target="_blank" rel="noopener noreferrer" {...props}>
-              {children}
-            </a>
+          <a href={href} target="_blank" rel="noopener noreferrer" {...props}>
+            {children}
+          </a>
         );
       }
 
@@ -136,9 +135,9 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content, fil
           }
         };
         return (
-            <a href={href} onClick={handleClick} {...props}>
-              {children}
-            </a>
+          <a href={href} onClick={handleClick} {...props}>
+            {children}
+          </a>
         );
       }
 
@@ -147,32 +146,40 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content, fil
         e.preventDefault();
         const targetPath = resolveRelativePath(filePath, href, isFolder);
         navigate('/' + targetPath);
-
+        
         // Scroll to top on navigation
         const scrollContainer = document.getElementById('scroll-container');
         if (scrollContainer) {
-          scrollContainer.scrollTop = 0;
+            scrollContainer.scrollTop = 0;
         }
       };
 
       return (
-          <a href={href} onClick={handleClick} {...props}>
-            {children}
-          </a>
+        <a href={href} onClick={handleClick} {...props}>
+          {children}
+        </a>
       );
-    }
+    },
+    // Wrap tables in a div to handle overflow (responsiveness) while keeping margins managed by wrapper
+    table: ({ children, ...props }: any) => (
+      <div className="overflow-x-auto my-6">
+        <table {...props}>
+          {children}
+        </table>
+      </div>
+    )
   };
 
   return (
-      // Use id="write" to trigger github.css styles, and markdown-body for standard scoping
-      <div id="write" className="markdown-body">
-        <ReactMarkdown
-            remarkPlugins={[remarkGfm, remarkMath, remarkMark]}
-            rehypePlugins={[rehypeRaw, rehypeKatex, rehypeHighlight, rehypeSlug]}
-            components={components}
-        >
-          {content}
-        </ReactMarkdown>
-      </div>
+    // Removed custom id="write" to rely purely on standard class
+    <div className="markdown-body">
+      <ReactMarkdown 
+        remarkPlugins={[remarkGfm, remarkMath, remarkMark]} 
+        rehypePlugins={[rehypeRaw, rehypeKatex, rehypeHighlight, rehypeSlug]}
+        components={components}
+      >
+        {content}
+      </ReactMarkdown>
+    </div>
   );
 };
