@@ -71,3 +71,22 @@ export const fetchMarkdownContent = async (path: string): Promise<string> => {
     return `# Error Loading Content\n\nCould not fetch content for **${path}**.\n\nThis may happen if the file doesn't exist on the remote server or if you are viewing the fallback tree but the content map is missing this file.`;
   }
 };
+
+export const findNodeByPath = (nodes: FileNode[], path: string): FileNode | null => {
+  const parts = path.split('/').filter(Boolean);
+  
+  let currentNodes = nodes;
+  let result: FileNode | null = null;
+
+  for (const part of parts) {
+    const found = currentNodes.find(n => n.name === part);
+    if (!found) return null;
+    result = found;
+    if (found.children) {
+      currentNodes = found.children;
+    } else {
+      currentNodes = [];
+    }
+  }
+  return result;
+};

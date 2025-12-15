@@ -1,50 +1,54 @@
-import React, {useEffect, useState, useCallback} from 'react';
+import React, {useEffect, useState, useCallback, useMemo} from 'react';
+import {HashRouter, MemoryRouter, Routes, Route, useLocation, useNavigate} from 'react-router-dom';
 import {Menu, X, BookOpen, Github, Download, List} from 'lucide-react';
-import {fetchFileTree, fetchMarkdownContent, BLOG_REPO_URL} from './services/blogService';
+import {fetchFileTree, fetchMarkdownContent, findNodeByPath, BLOG_REPO_URL} from './services/blogService';
 import {FileNode} from './types';
 import {FileTreeItem} from './components/FileTree';
 import {MarkdownRenderer} from './components/MarkdownRenderer';
 import {LoadingSpinner} from './components/LoadingSpinner';
 import {TableOfContents} from './components/TableOfContents';
 
-const App: React.FC = () => {
+const BlogApp: React.FC = () => {
     const [tree, setTree] = useState<FileNode[]>([]);
     const [isLoadingTree, setIsLoadingTree] = useState(true);
-    const [error, setError] = useState<string | null>(null);
+    const [treeError, setTreeError] = useState<string | null>(null);
 
-    const [selectedPath, setSelectedPath] = useState<string | null>(null);
     const [markdownContent, setMarkdownContent] = useState<string | null>(null);
     const [isContentLoading, setIsContentLoading] = useState(false);
-    const [isSidebarOpen, setIsSidebarOpen] = useState(true); // Default open on desktop
-    const [isTocOpen, setIsTocOpen] = useState(true); // Default TOC open
 
-    // Handle responsive sidebar defaults
+    const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+    const [isTocOpen, setIsTocOpen] = useState(true);
+
+    const location = useLocation();
+    const navigate = useNavigate();
+
+    // Derived state from URL
+    const activePath = location.pathname.slice(1) ? decodeURIComponent(location.pathname.slice(1)) : null;
+
+    // 1. Responsive Sidebar Defaults
     useEffect(() => {
         const handleResize = () => {
             if (window.innerWidth < 1024) {
                 setIsSidebarOpen(false);
-                setIsTocOpen(false); // Hide TOC on mobile by default
+                setIsTocOpen(false);
             } else {
                 setIsSidebarOpen(true);
                 setIsTocOpen(true);
             }
         };
-
-        // Initial check
         handleResize();
-
         window.addEventListener('resize', handleResize);
         return () => window.removeEventListener('resize', handleResize);
     }, []);
 
-    // Fetch Tree on Mount
+    // 2. Fetch Tree
     useEffect(() => {
         const loadTree = async () => {
             try {
                 const data = await fetchFileTree();
                 setTree(data);
             } catch (err) {
-                setError("Failed to load blog directory. Please try again later.");
+                setTreeError("Failed to load blog directory.");
             } finally {
                 setIsLoadingTree(false);
             }
@@ -52,18 +56,51 @@ const App: React.FC = () => {
         loadTree();
     }, []);
 
-    // Fetch Content when selectedPath changes
-    useEffect(() => {
-        if (!selectedPath) return;
+    // Calculate if current path is a folder directly from tree to ensure prop consistency
+    const currentNode = useMemo(() => {
+        if (!tree.length || !activePath) return null;
+        return findNodeByPath(tree, activePath);
+    }, [tree, activePath]);
 
+    const isCurrentPathFolder = currentNode ? currentNode.children !== null : false;
+
+    // 3. Handle Route Changes (Load Content)
+    useEffect(() => {
         const loadContent = async () => {
+            if (!activePath) {
+                setMarkdownContent(null); // Home state
+                return;
+            }
+
+            if (isLoadingTree) return; // Wait for tree
+
+            if (!currentNode) {
+                // Path doesn't exist in tree
+                setMarkdownContent(`# 404 Not Found\n\nThe path **${activePath}** does not exist.`);
+                return;
+            }
+
+            if (isCurrentPathFolder) {
+                // Render a simple folder view
+                // We could look for a README.md inside, but for now we list children
+                const childrenList = currentNode.children?.map(child =>
+                    `- [${child.name}](${child.name})` // Relative link
+                ).join('\n');
+
+                // Add back link. Since we implemented ".." support in MarkdownRenderer, we can use it here.
+                const backLink = `[⬅️ Back to parent](..)\n\n`;
+
+                setMarkdownContent(`# 📂 ${currentNode.name}\n\n${backLink}Select a file from this folder:\n\n${childrenList}`);
+                return;
+            }
+
+            // It's a file, fetch it
             setIsContentLoading(true);
-            setMarkdownContent(null);
             try {
-                const content = await fetchMarkdownContent(selectedPath);
+                const content = await fetchMarkdownContent(activePath);
                 setMarkdownContent(content);
 
-                // On mobile, close sidebar after selection
+                // Mobile UX: Close sidebar on selection
                 if (window.innerWidth < 1024) {
                     setIsSidebarOpen(false);
                 }
@@ -73,29 +110,30 @@ const App: React.FC = () => {
                 setIsContentLoading(false);
             }
         };
-        loadContent();
-    }, [selectedPath]);
 
-    const handleSelectFile = useCallback((path: string) => {
-        setSelectedPath(path);
-        // Scroll to top of content
+        loadContent();
+    }, [activePath, tree, isLoadingTree, currentNode, isCurrentPathFolder]);
+
+    // Navigate handler for FileTree
+    const handleNavigate = useCallback((path: string) => {
+        navigate('/' + path);
+        // Scroll to top
         const scrollContainer = document.getElementById('scroll-container');
         if (scrollContainer) {
             scrollContainer.scrollTop = 0;
         }
-    }, []);
+    }, [navigate]);
 
     const toggleSidebar = () => setIsSidebarOpen(!isSidebarOpen);
     const toggleToc = () => setIsTocOpen(!isTocOpen);
 
     const handleDownload = () => {
-        if (!markdownContent || !selectedPath) return;
-
+        if (!markdownContent || !activePath) return;
         const blob = new Blob([markdownContent], {type: 'text/markdown'});
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = selectedPath.split('/').pop() || 'download.md';
+        a.download = activePath.split('/').pop() || 'download.md';
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
@@ -124,10 +162,19 @@ const App: React.FC = () => {
             >
                 <div className="p-6 border-b border-slate-100 flex items-center justify-between">
                     <div className="flex items-center gap-3">
-                        <div className="p-2 bg-primary-100 rounded-lg text-primary-700">
+                        <div
+                            className="p-2 bg-primary-100 rounded-lg text-primary-700 cursor-pointer"
+                            onClick={() => navigate('/')}
+                        >
                             <BookOpen size={20}/>
                         </div>
-                        <h1 className="font-bold text-lg tracking-tight text-slate-800">Harvey Blocks' Space</h1>
+                        {/* Added border-none and font-sans to override potentially conflicting github.css globals */}
+                        <h1
+                            className="font-bold text-lg tracking-tight text-slate-800 cursor-pointer border-none font-sans"
+                            onClick={() => navigate('/')}
+                        >
+                            Harvey Blocks' Space
+                        </h1>
                     </div>
                     <button
                         onClick={toggleSidebar}
@@ -143,9 +190,9 @@ const App: React.FC = () => {
                             <div
                                 className="w-6 h-6 border-2 border-primary-500 border-t-transparent rounded-full animate-spin"></div>
                         </div>
-                    ) : error ? (
+                    ) : treeError ? (
                         <div className="p-6 text-sm text-red-500 text-center">
-                            {error}
+                            {treeError}
                         </div>
                     ) : (
                         <div className="flex flex-col">
@@ -155,8 +202,8 @@ const App: React.FC = () => {
                                     node={node}
                                     pathPrefix=""
                                     level={1}
-                                    onSelectFile={handleSelectFile}
-                                    selectedPath={selectedPath}
+                                    onNavigate={handleNavigate}
+                                    activePath={activePath}
                                 />
                             ))}
                             {tree.length === 0 && (
@@ -171,30 +218,28 @@ const App: React.FC = () => {
                 </div>
             </aside>
 
-            {/* Main Content Area Wrapper */}
+            {/* Main Content Area */}
             <main className="flex-1 flex flex-col h-full overflow-hidden relative">
-                {/* Header */}
                 <header
                     className="bg-white/80 backdrop-blur-md border-b border-slate-200 h-16 flex items-center px-4 lg:px-8 justify-between sticky top-0 z-10 shrink-0">
                     <div className="flex items-center gap-4">
                         <button
                             onClick={toggleSidebar}
                             className="p-2 -ml-2 text-slate-500 hover:text-primary-600 hover:bg-primary-50 rounded-lg transition-colors"
-                            aria-label="Toggle sidebar"
                         >
                             <Menu size={24}/>
                         </button>
                         <div className="flex flex-col">
                             <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Currently Reading</span>
                             <h2 className="text-sm font-medium text-slate-700 truncate max-w-[200px] sm:max-w-md"
-                                style={{margin : '2px'}}>
-                                {selectedPath ? selectedPath.split('/').pop() : 'Select an article'}
+                                style={{margin: "2px"}}>
+                                {activePath ? activePath.split('/').pop() : 'Home'}
                             </h2>
                         </div>
                     </div>
 
                     <div className="flex items-center gap-2">
-                        {selectedPath && (
+                        {activePath && (
                             <>
                                 <button
                                     onClick={handleDownload}
@@ -224,12 +269,10 @@ const App: React.FC = () => {
                     </div>
                 </header>
 
-                {/* Flex container for Content + TOC */}
                 <div className="flex-1 flex overflow-hidden">
-                    {/* Scrollable Article Content */}
                     <div className="flex-1 overflow-y-auto scroll-smooth" id="scroll-container">
                         <div className="max-w-4xl mx-auto px-4 py-8 lg:px-12 lg:py-12">
-                            {!selectedPath ? (
+                            {!activePath ? (
                                 <div className="flex flex-col items-center justify-center h-[60vh] text-center px-4">
                                     <div
                                         className="w-20 h-20 bg-primary-50 rounded-full flex items-center justify-center mb-6 text-primary-300">
@@ -245,17 +288,17 @@ const App: React.FC = () => {
                                 <LoadingSpinner/>
                             ) : (
                                 <div className="animate-in fade-in duration-500 slide-in-from-bottom-4">
-                                    {markdownContent && <MarkdownRenderer content={markdownContent}/>}
+                                    {markdownContent &&
+                                        <MarkdownRenderer content={markdownContent} filePath={activePath}
+                                                          isFolder={isCurrentPathFolder}/>}
                                 </div>
                             )}
-
-                            {/* Footer spacer */}
                             <div className="h-20"></div>
                         </div>
                     </div>
 
-                    {/* Right TOC Sidebar (Desktop only or conditional) */}
-                    {selectedPath && markdownContent && isTocOpen && (
+                    {/* Right TOC Sidebar (only for markdown files that are loaded) */}
+                    {activePath && markdownContent && isTocOpen && !isCurrentPathFolder && (
                         <div className="w-64 flex-shrink-0 border-l border-slate-200 bg-slate-50/50 hidden lg:block">
                             <TableOfContents content={markdownContent}/>
                         </div>
@@ -263,6 +306,24 @@ const App: React.FC = () => {
                 </div>
             </main>
         </div>
+    );
+};
+
+const App: React.FC = () => {
+    // Check if we are running in a restricted environment (like a blob sandbox)
+    // where modifying location (HashRouter) might cause "Location.assign" access denied errors.
+    const isSandbox = typeof window !== 'undefined' && window.location.protocol === 'blob:';
+
+    return (
+        isSandbox ? (
+            <MemoryRouter>
+                <BlogApp/>
+            </MemoryRouter>
+        ) : (
+            <HashRouter>
+                <BlogApp/>
+            </HashRouter>
+        )
     );
 };
 

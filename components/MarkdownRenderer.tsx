@@ -6,65 +6,173 @@ import rehypeKatex from 'rehype-katex';
 import rehypeHighlight from 'rehype-highlight';
 import rehypeRaw from 'rehype-raw';
 import rehypeSlug from 'rehype-slug';
-import {visit} from 'unist-util-visit';
-import "../style/github.css";
-import "../style/MarkdownStyles.css";
+import { visit } from 'unist-util-visit';
+import { useNavigate } from 'react-router-dom';
+import "../style/MarkdownStyles.css"
 
 interface MarkdownRendererProps {
-    content: string;
+  content: string;
+  filePath: string;
+  isFolder?: boolean;
 }
 
 /**
- * Custom Remark plugin to handle ==text== highlighting.
- * It transforms text nodes containing ==...== into HTML <mark> tags.
- * Since we use rehype-raw, these tags are preserved and rendered.
+ * Helper to resolve relative paths
+ * Requirements:
+ * 1. Decode URL (handle %20, etc.)
+ * 2. "\" converts to "/"
+ * 3. Multiple "/" merge into one
+ * 4. Handle "./" (current dir) and "../" (parent dir)
+ * 5. Leading "/" is treated as relative to the current context, not root.
  */
-const remarkMark = () => {
-    return (tree: any) => {
-        visit(tree, 'text', (node: any, index: number | undefined, parent: any) => {
-            const value = node.value;
+const resolveRelativePath = (baseFile: string, relativeUrl: string, isFolder: boolean = false) => {
+  if (!relativeUrl) return '';
 
-            // Fast check if the node contains the marker
-            if (!value.includes('==')) return;
+  // 1. Decode the URL first (handle encoded characters like Chinese or spaces)
+  let decodedUrl = relativeUrl;
+  try {
+    decodedUrl = decodeURIComponent(relativeUrl);
+  } catch (e) {
+    console.warn('Failed to decode relative URL:', relativeUrl);
+  }
 
-            // Split by the delimiter, keeping the delimiter in the result to identify it
-            // Regex matches: ==(content inside)==
-            const regex = /(==[^=]+==)/g;
-            const parts = value.split(regex);
+  // 2. Normalize slashes: replace backslash with forward slash
+  let normalizedUrl = decodedUrl.replace(/\\/g, '/');
 
-            // If no split happened, nothing to replace
-            if (parts.length <= 1) return;
+  // 3. Collapse multiple slashes into one
+  normalizedUrl = normalizedUrl.replace(/\/+/g, '/');
 
-            const newNodes = parts.map((part: string) => {
-                if (part.startsWith('==') && part.endsWith('==') && part.length > 4) {
-                    return {
-                        type: 'html', // Use 'html' type so rehype-raw picks it up
-                        value: `<mark>${part.slice(2, -2)}</mark>`
-                    };
-                }
-                return {type: 'text', value: part};
-            });
+  // 4. Handle leading slash: treat as relative to current directory per specific requirement
+  // "/aaa/bbb.md" -> "aaa/bbb.md" (relative to base)
+  if (normalizedUrl.startsWith('/')) {
+    normalizedUrl = normalizedUrl.slice(1);
+  }
 
-            // Replace the original text node with the new array of nodes
-            if (parent && index !== undefined) {
-                parent.children.splice(index, 1, ...newNodes);
-                // Advance index to skip the newly inserted nodes
-                return index + newNodes.length;
-            }
-        });
-    };
+  // Split base path into parts
+  // Filter boolean removes empty strings from double slashes or start/end
+  const baseDirParts = baseFile.split('/').filter(Boolean);
+
+  if (!isFolder) {
+    // If it's a file path (e.g. a/b/c.md), the context is the folder (a/b)
+    baseDirParts.pop();
+  }
+
+  const relativeParts = normalizedUrl.split('/').filter(Boolean);
+
+  for (const part of relativeParts) {
+    if (part === '.') {
+      // Current directory, do nothing
+      continue;
+    }
+    if (part === '..') {
+      // Parent directory, pop from base
+      if (baseDirParts.length > 0) {
+        baseDirParts.pop();
+      }
+    } else {
+      // Normal path segment
+      baseDirParts.push(part);
+    }
+  }
+
+  return baseDirParts.join('/');
 };
 
-export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({content}) => {
-    return (
-        <article
-            className="prose prose-slate prose-lg max-w-none prose-headings:font-sans prose-headings:font-bold prose-headings:text-slate-800 prose-p:font-serif prose-p:text-slate-600 prose-p:leading-relaxed prose-a:text-primary-600 prose-a:no-underline hover:prose-a:underline prose-blockquote:border-l-primary-500 prose-blockquote:bg-slate-50 prose-blockquote:py-1 prose-blockquote:px-4 prose-img:rounded-xl prose-img:shadow-md">
-            <ReactMarkdown
-                remarkPlugins={[remarkGfm, remarkMath, remarkMark]}
-                rehypePlugins={[rehypeRaw, rehypeKatex, rehypeHighlight, rehypeSlug]}
-            >
-                {content}
-            </ReactMarkdown>
-        </article>
-    );
+/**
+ * Custom Remark plugin to handle ==text== highlighting.
+ */
+const remarkMark = () => {
+  return (tree: any) => {
+    visit(tree, 'text', (node: any, index: number | undefined, parent: any) => {
+      const value = node.value;
+      if (!value.includes('==')) return;
+
+      const regex = /(==[^=]+==)/g;
+      const parts = value.split(regex);
+
+      if (parts.length <= 1) return;
+
+      const newNodes = parts.map((part: string) => {
+        if (part.startsWith('==') && part.endsWith('==') && part.length > 4) {
+          return {
+            type: 'html',
+            value: `<mark>${part.slice(2, -2)}</mark>`
+          };
+        }
+        return { type: 'text', value: part };
+      });
+
+      if (parent && index !== undefined) {
+        parent.children.splice(index, 1, ...newNodes);
+        return index + newNodes.length;
+      }
+    });
+  };
+};
+
+export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content, filePath, isFolder = false }) => {
+  const navigate = useNavigate();
+
+  const components = {
+    a: ({ href, children, ...props }: any) => {
+      // 1. External Links
+      // Note: We check for protocol. If it has a protocol, we treat it as external.
+      if (!href || href.startsWith('http') || href.startsWith('https') || href.startsWith('mailto:')) {
+        return (
+            <a href={href} target="_blank" rel="noopener noreferrer" {...props}>
+              {children}
+            </a>
+        );
+      }
+
+      // 2. Anchors (within same page)
+      if (href.startsWith('#')) {
+        const handleClick = (e: React.MouseEvent) => {
+          e.preventDefault();
+          const id = href.slice(1);
+          const el = document.getElementById(id);
+          if (el) {
+            el.scrollIntoView({ behavior: 'smooth' });
+          }
+        };
+        return (
+            <a href={href} onClick={handleClick} {...props}>
+              {children}
+            </a>
+        );
+      }
+
+      // 3. Internal Relative Links
+      const handleClick = (e: React.MouseEvent) => {
+        e.preventDefault();
+        const targetPath = resolveRelativePath(filePath, href, isFolder);
+        navigate('/' + targetPath);
+
+        // Scroll to top on navigation
+        const scrollContainer = document.getElementById('scroll-container');
+        if (scrollContainer) {
+          scrollContainer.scrollTop = 0;
+        }
+      };
+
+      return (
+          <a href={href} onClick={handleClick} {...props}>
+            {children}
+          </a>
+      );
+    }
+  };
+
+  return (
+      // Use id="write" to trigger github.css styles, and markdown-body for standard scoping
+      <div id="write" className="markdown-body">
+        <ReactMarkdown
+            remarkPlugins={[remarkGfm, remarkMath, remarkMark]}
+            rehypePlugins={[rehypeRaw, rehypeKatex, rehypeHighlight, rehypeSlug]}
+            components={components}
+        >
+          {content}
+        </ReactMarkdown>
+      </div>
+  );
 };

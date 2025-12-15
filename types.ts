@@ -7,8 +7,8 @@ export interface TreeItemProps {
   node: FileNode;
   pathPrefix: string;
   level: number;
-  onSelectFile: (path: string) => void;
-  selectedPath: string | null;
+  onNavigate: (path: string) => void;
+  activePath: string | null;
 }
 
 export interface BreadcrumbItem {

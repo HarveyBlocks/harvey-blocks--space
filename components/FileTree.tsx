@@ -1,13 +1,13 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { ChevronRight, ChevronDown, FileText, Folder, FolderOpen } from 'lucide-react';
-import { FileNode, TreeItemProps } from '../types';
+import { TreeItemProps } from '../types';
 
 export const FileTreeItem: React.FC<TreeItemProps> = ({ 
   node, 
   pathPrefix, 
   level, 
-  onSelectFile, 
-  selectedPath 
+  onNavigate, 
+  activePath 
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   
@@ -16,28 +16,36 @@ export const FileTreeItem: React.FC<TreeItemProps> = ({
   
   const isFolder = node.children !== null;
   const isMarkdown = !isFolder && node.name.toLowerCase().endsWith('.md');
-  const isSelected = selectedPath === currentPath;
+  const isSelected = activePath === currentPath;
+
+  // Auto-expand if the active path is inside this folder
+  useEffect(() => {
+    if (activePath && activePath.startsWith(currentPath + '/')) {
+      setIsOpen(true);
+    }
+  }, [activePath, currentPath]);
 
   const handleToggle = (e: React.MouseEvent) => {
     e.stopPropagation();
     setIsOpen(!isOpen);
+    // Optional: If you want clicking the chevron to also navigate to the folder URL
+    // onNavigate(currentPath); 
   };
 
   const handleSelect = (e: React.MouseEvent) => {
     e.stopPropagation();
-    if (isMarkdown) {
-      onSelectFile(currentPath);
-    } else if (isFolder) {
+    if (isFolder) {
       setIsOpen(!isOpen);
+      onNavigate(currentPath);
+    } else if (isMarkdown) {
+      onNavigate(currentPath);
     }
   };
 
-  // Skip rendering non-markdown files if strict filtering is desired, 
-  // but usually in a file tree we want to see everything or at least structure.
-  // We will visually disable non-md files.
+  // Skip rendering non-markdown files if strict filtering is desired
   const isDisabled = !isFolder && !isMarkdown;
 
-  if (isDisabled) return null; // Hide non-md files for cleaner blog view
+  if (isDisabled) return null; 
 
   const paddingLeft = `${level * 1.25}rem`;
 
@@ -64,7 +72,10 @@ export const FileTreeItem: React.FC<TreeItemProps> = ({
         </span>
 
         {isFolder && (
-          <span className="ml-auto opacity-50">
+          <span 
+            className="ml-auto opacity-50 p-1 hover:bg-slate-200 rounded"
+            onClick={handleToggle}
+          >
             {isOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
           </span>
         )}
@@ -78,8 +89,8 @@ export const FileTreeItem: React.FC<TreeItemProps> = ({
               node={child}
               pathPrefix={currentPath}
               level={level + 1}
-              onSelectFile={onSelectFile}
-              selectedPath={selectedPath}
+              onNavigate={onNavigate}
+              activePath={activePath}
             />
           ))}
         </div>
