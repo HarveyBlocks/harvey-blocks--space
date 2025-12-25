@@ -76,6 +76,23 @@
     margin-bottom: 1.25em !important;
 }
 
+.markdown-body ul {
+    list-style-type: square;
+}
+
+.markdown-body > ul {
+    list-style-type: disc;
+}
+
+.markdown-body > ul > li > ul {
+    list-style-type: circle;
+}
+
+
+.markdown-body ol {
+    list-style: decimal;
+}
+
 .markdown-body li {
     margin: 0.5em 0 !important;
     color: #334155;
@@ -164,9 +181,9 @@
 }
 
 /* Custom Highlights */
-mark {
+.markdown-body mark {
     background-color: #fef08a;
-    color: #854d0e;
+    color: #43037c;
     padding: 0.1em 0.3em;
     border-radius: 0.25rem;
 }

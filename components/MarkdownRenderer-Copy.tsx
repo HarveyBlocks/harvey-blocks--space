@@ -80,61 +80,34 @@ const resolveRelativePath = (baseFile: string, relativeUrl: string, isFolder: bo
 /**
  * Custom Remark plugin to handle ==text== highlighting.
  */
-function visitorFactory(supMark: string, supHtmlTag: string) {
-    let inMark = false;
-    return (node: any, index: number | undefined, parent: any) => {
-        const value: string = node.value;
-        let preIndex = 0;
-        const newNodes = [];
-        while (true) {
-            const markIndex = value.indexOf(supMark, preIndex);
-            if (markIndex === -1) break;
-            const text = value.slice(preIndex, markIndex);
-            if (text.length > 0) {
-                if (inMark) {
-                    newNodes.push({type: 'html', value: `<${supHtmlTag}>${text}</${supHtmlTag}>`});
-                } else {
-                    newNodes.push({type: 'text', value: text});
-                }
-            }
-            inMark = !inMark;
-            preIndex = markIndex + supMark.length;
-        }
-        const text = value.slice(preIndex);
-        if (text.length > 0) {
-            if (inMark) {
-                newNodes.push({type: 'html', value: `<${supHtmlTag}>${text}</${supHtmlTag}>`});
-            } else {
-                newNodes.push({type: 'text', value: text});
-            }
-        }
-        if (parent && index !== undefined) {
-            parent.children.splice(index, 1, ...newNodes);
-            return index + newNodes.length;
-        }
-    };
-}
-
 const remarkMark: () => (tree: any) => void = (): (any) => void => {
     return (tree: any): void => {
         // 1. 定义前后缀
-        let visitor = visitorFactory('==', 'mark');
-        visit(tree, 'text', visitor);
-    };
-};
+        let visitor = (node: any, index: number | undefined, parent: any) => {
+            const value = node.value;
+            console.log(value)
+            if (!value.includes('==')) return;
 
-const remarkSup: () => (tree: any) => void = (): (any) => void => {
-    return (tree: any): void => {
-        // 1. 定义前后缀
-        let visitor = visitorFactory('^', 'sup');
-        visit(tree, 'text', visitor);
-    };
-};
+            const regex = /(==[^=]+==)/g;
+            const parts = value.split(regex);
 
-const remarkDel: () => (tree: any) => void = (): (any) => void => {
-    return (tree: any): void => {
-        // 1. 定义前后缀
-        let visitor = visitorFactory('~~', 'del');
+            if (parts.length <= 1) return;
+
+            const newNodes = parts.map((part: string) => {
+                if (part.startsWith('==') && part.endsWith('==') && part.length > 4) {
+                    return {
+                        type: 'html',
+                        value: `<mark>${part.slice(2, -2)}</mark>`
+                    };
+                }
+                return {type: 'text', value: part};
+            });
+
+            if (parent && index !== undefined) {
+                parent.children.splice(index, 1, ...newNodes);
+                return index + newNodes.length;
+            }
+        };
         visit(tree, 'text', visitor);
     };
 };
@@ -204,7 +177,7 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({content, file
         // Removed custom id="write" to rely purely on standard class
         <div className="markdown-body">
             <ReactMarkdown
-                remarkPlugins={[remarkGfm, remarkMath, remarkMark, remarkDel, remarkSup]}
+                remarkPlugins={[remarkGfm, remarkMath, remarkMark]}
                 rehypePlugins={[rehypeRaw, rehypeKatex, rehypeHighlight, rehypeSlug]}
                 components={components}
             >
