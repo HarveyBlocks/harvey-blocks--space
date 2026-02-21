@@ -104,13 +104,14 @@
 
 /* Code Blocks */
 .markdown-body pre {
-    background-color: #f6f8fa !important; /* Light Gray (GitHub style) */
-    border-radius: 0.75rem !important;
-    border: 1px solid #d1d5db !important; /* Slate-300 */
-    padding: 1.25em !important;
-    margin: 1.5em 0 !important;
-    color: #1f2937 !important; /* Slate-800 */
-    box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1);
+    /* Removed styles to avoid conflict with CodeBlock component */
+    background-color: transparent !important;
+    border-radius: 0 !important;
+    border: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    box-shadow: none !important;
+    color: inherit !important;
 }
 
 .markdown-body code {

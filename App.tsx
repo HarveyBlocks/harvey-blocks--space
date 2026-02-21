@@ -317,8 +317,10 @@ const BlogApp: React.FC = () => {
 
                     {/* Right TOC Sidebar (only for markdown files that are loaded) */}
                     {activePath && activePath !== 'source_tree' && markdownContent && isTocOpen && !isCurrentPathFolder && (
-                        <div className="w-64 flex-shrink-0 border-l border-slate-200 bg-slate-50/50 hidden lg:block">
-                            <TableOfContents content={markdownContent}/>
+                        <div className="w-64 flex-shrink-0 border-l border-slate-200 bg-slate-50/50 hidden lg:block overflow-y-auto h-full">
+                            <div className="p-4">
+                                <TableOfContents content={markdownContent}/>
+                            </div>
                         </div>
                     )}
                 </div>

@@ -3,6 +3,7 @@ import GithubSlugger from 'github-slugger';
 
 interface TableOfContentsProps {
   content: string;
+  className?: string;
 }
 
 interface TocItem {
@@ -11,7 +12,7 @@ interface TocItem {
   level: number;
 }
 
-export const TableOfContents: React.FC<TableOfContentsProps> = ({ content }) => {
+export const TableOfContents: React.FC<TableOfContentsProps> = ({ content, className = '' }) => {
   const headings = useMemo(() => {
     // Initialize GithubSlugger to handle duplicates and special characters (like Chinese)
     // exactly how rehype-slug does it.
@@ -55,36 +56,38 @@ export const TableOfContents: React.FC<TableOfContentsProps> = ({ content }) => 
   if (headings.length === 0) return null;
 
   return (
-    <nav className="h-full overflow-y-auto pl-2 py-4">
-      <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-4 pl-2">
-        On this page
+    <nav className={`my-8 ${className}`}>
+      <h3 className="text-xl font-bold text-gray-900 mb-4 px-2">
+        TOF
       </h3>
-      <ul className="space-y-1">
+      <div className="flex flex-col space-y-1">
         {headings.map((heading) => (
-          <li key={heading.id}>
-            <a
-              href={`#${heading.id}`}
-              onClick={(e) => {
-                e.preventDefault();
-                const element = document.getElementById(heading.id);
-                if (element) {
-                  element.scrollIntoView({ behavior: 'smooth' });
-                  // Optionally update URL hash
-                  // window.history.pushState(null, '', `#${heading.id}`);
-                }
-              }}
-              className={`
-                block text-sm py-1 pr-2 transition-colors border-l-2 border-transparent hover:border-slate-300
-                ${heading.level === 1 ? 'pl-2 font-medium text-slate-800' : ''}
-                ${heading.level === 2 ? 'pl-4 text-slate-600 hover:text-slate-900' : ''}
-                ${heading.level >= 3 ? 'pl-6 text-slate-500 hover:text-slate-800' : ''}
-              `}
-            >
-              {heading.text}
-            </a>
-          </li>
+          <a
+            key={heading.id}
+            href={`#${heading.id}`}
+            onClick={(e) => {
+              e.preventDefault();
+              const element = document.getElementById(heading.id);
+              if (element) {
+                element.scrollIntoView({ behavior: 'smooth' });
+                window.history.pushState(null, '', `#${heading.id}`);
+              }
+            }}
+            className={`
+              block py-1.5 pr-4 rounded-md transition-colors duration-200
+              hover:bg-gray-100 hover:text-teal-700
+              ${heading.level === 1 ? 'font-semibold text-gray-800 text-base' : ''}
+              ${heading.level === 2 ? 'font-medium text-gray-700 text-[15px]' : ''}
+              ${heading.level >= 3 ? 'text-gray-500 text-sm' : ''}
+            `}
+            style={{
+              paddingLeft: `${(heading.level - 1) * 1.25 + 0.5}rem`
+            }}
+          >
+            {heading.text}
+          </a>
         ))}
-      </ul>
+      </div>
     </nav>
   );
 };

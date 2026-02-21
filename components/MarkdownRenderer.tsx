@@ -8,6 +8,8 @@ import rehypeRaw from 'rehype-raw';
 import rehypeSlug from 'rehype-slug';
 import {visit} from 'unist-util-visit';
 import {useNavigate} from 'react-router-dom';
+import {DiagramRenderer} from './DiagramRenderer';
+import {CodeBlock} from './CodeBlock';
 
 interface MarkdownRendererProps {
     content: string;
@@ -139,10 +141,120 @@ const remarkDel: () => (tree: any) => void = (): (any) => void => {
     };
 };
 
+import {TableOfContents} from './TableOfContents';
+import {ImageViewer} from './ImageViewer';
+import {useState} from 'react';
+
 export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({content, filePath, isFolder = false}) => {
     const navigate = useNavigate();
+    const [viewerOpen, setViewerOpen] = useState(false);
+    const [viewerContent, setViewerContent] = useState('');
+    const [viewerType, setViewerType] = useState<'image' | 'svg'>('image');
+
+    const handleImageClick = (src: string) => {
+        setViewerContent(src);
+        setViewerType('image');
+        setViewerOpen(true);
+    };
 
     const components = {
+        img: ({src, alt, ...props}: any) => (
+            <img 
+               src={src} 
+               alt={alt} 
+               {...props} 
+               className="cursor-zoom-in max-w-full h-auto transition-transform hover:scale-[1.02]"
+               onClick={(e) => {
+                   e.stopPropagation();
+                   handleImageClick(src);
+               }}
+           />
+       ),
+        p: ({children, ...props}: any) => {
+            if (typeof children === 'string' && children.trim().toUpperCase() === '[TOC]') {
+                return <TableOfContents content={content} />;
+            }
+            return <p {...props}>{children}</p>;
+        },
+        pre: ({node, children, ...props}: any) => {
+            const childArray = React.Children.toArray(children);
+            
+            // Find the code element to extract language and content
+            // We look for a child that is either a 'code' element or has a language class
+            const codeElement = childArray.find((child: any) => {
+                if (!React.isValidElement(child)) return false;
+                const type = child.type;
+                const childProps = child.props as any;
+                return type === 'code' || (childProps?.className && typeof childProps.className === 'string' && childProps.className.includes('language-'));
+            }) as React.ReactElement<any> | undefined;
+
+            let language = '';
+            let rawCode = '';
+            let codeContent: React.ReactNode = children;
+
+            if (codeElement) {
+                codeContent = codeElement;
+                const className = (codeElement.props as any).className || '';
+                // Robust regex to capture any non-whitespace language identifier
+                const match = /language-([^\s]+)/i.exec(className);
+                language = match ? match[1].toLowerCase() : '';
+                
+                // Helper to extract raw text
+                const getCodeText = (nodes: any): string => {
+                        if (!nodes) return '';
+                        if (typeof nodes === 'string') return nodes;
+                        if (Array.isArray(nodes)) return nodes.map(getCodeText).join('');
+                        if (React.isValidElement(nodes)) {
+                            return getCodeText((nodes as any).props.children);
+                        }
+                        // Type guard for object with children
+                        if (typeof nodes === 'object' && 'props' in nodes) {
+                            return getCodeText((nodes as any).props.children);
+                        }
+                        return '';
+                };
+                rawCode = getCodeText((codeElement.props as any).children);
+            } else {
+                // Fallback: treat all children as raw text
+                 const getCodeText = (nodes: any): string => {
+                        if (!nodes) return '';
+                        if (typeof nodes === 'string') return nodes;
+                        if (Array.isArray(nodes)) return nodes.map(getCodeText).join('');
+                        if (React.isValidElement(nodes)) {
+                            return getCodeText((nodes as any).props.children);
+                        }
+                        // Type guard for object with children
+                        if (typeof nodes === 'object' && 'props' in nodes) {
+                             return getCodeText((nodes as any).props.children);
+                        }
+                        return '';
+                };
+                rawCode = getCodeText(children);
+            }
+
+            // Special handling for Diagram languages
+            if (language === 'mermaid' || language === 'plantuml') {
+                return <DiagramRenderer code={rawCode.trim()} language={language as 'mermaid' | 'plantuml'} />;
+            }
+
+            // Standard Code Block
+            return (
+                <CodeBlock language={language} code={rawCode}>
+                    <pre {...props} className="!bg-transparent !border-0 !shadow-none !m-0 !p-4 font-mono text-sm overflow-auto max-h-[600px]">
+                        {codeContent}
+                    </pre>
+                </CodeBlock>
+            );
+        },
+        code({node, inline, className, children, ...props}: any) {
+            // Simple code component that just renders the code
+            // We rely on 'pre' to handle the block rendering and Diagram logic
+            return (
+                <code className={className} {...props}>
+                    {children}
+                </code>
+            );
+        },
         a: ({href, children, ...props}: any) => {
             // 1. External Links
             // Note: We check for protocol. If it has a protocol, we treat it as external.
@@ -210,6 +322,13 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({content, file
             >
                 {content}
             </ReactMarkdown>
+
+            <ImageViewer 
+                isOpen={viewerOpen} 
+                onClose={() => setViewerOpen(false)} 
+                content={viewerContent} 
+                type={viewerType} 
+            />
         </div>
     );
 };
