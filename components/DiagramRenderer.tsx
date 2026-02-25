@@ -192,12 +192,14 @@ export const DiagramRenderer: React.FC<DiagramRendererProps> = ({ code, language
                             onClick={() => setViewerOpen(true)}
                         />
                     ) : (
-                        <img 
-                            src={content} 
-                            alt="PlantUML Diagram" 
-                            className="max-w-full h-auto object-contain cursor-zoom-in" 
-                            onClick={() => setViewerOpen(true)}
-                        />
+                        content ? (
+                            <img 
+                                src={content} 
+                                alt="PlantUML Diagram" 
+                                className="max-w-full h-auto object-contain cursor-zoom-in" 
+                                onClick={() => setViewerOpen(true)}
+                            />
+                        ) : null
                     )}
                 </div>
             ) : (

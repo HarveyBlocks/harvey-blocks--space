@@ -150,8 +150,12 @@ interface MarkdownRendererProps {
 /**
  * Image component with error handling fallback.
  */
-const SafeImage: React.FC<{ src: string; alt: string; onClick?: (src: string) => void }> = ({ src, alt, onClick }) => {
+const SafeImage: React.FC<{ src?: string; alt: string; onClick?: (src: string) => void }> = ({ src, alt, onClick }) => {
     const [hasError, setHasError] = useState(false);
+
+    if (!src) {
+        return null;
+    }
 
     if (hasError) {
         return (

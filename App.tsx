@@ -8,6 +8,7 @@ import {MarkdownRenderer} from './components/MarkdownRenderer';
 import {LoadingSpinner} from './components/LoadingSpinner';
 import {TableOfContents} from './components/TableOfContents';
 import {SourceTreeView} from './components/SourceTreeView';
+import {LocalMarkdownHandler} from './components/LocalMarkdownHandler';
 
 const BlogApp: React.FC = () => {
     const [tree, setTree] = useState<FileNode[]>([]);
@@ -16,6 +17,7 @@ const BlogApp: React.FC = () => {
 
     const [markdownContent, setMarkdownContent] = useState<string | null>(null);
     const [isContentLoading, setIsContentLoading] = useState(false);
+    const [localRenderInfo, setLocalRenderInfo] = useState<{name: string, content: string} | null>(null);
 
     const [isSidebarOpen, setIsSidebarOpen] = useState(true);
     const [isTocOpen, setIsTocOpen] = useState(true);
@@ -72,10 +74,22 @@ const BlogApp: React.FC = () => {
         loadTree();
     }, []);
 
+    // Clear local render info when navigating to a new path
+    useEffect(() => {
+        if (activePath !== 'local-render') {
+            setLocalRenderInfo(null);
+        }
+    }, [activePath]);
+
+    const handleHomeClick = useCallback(() => {
+        setLocalRenderInfo(null);
+        navigate('/');
+    }, [navigate]);
+
     // Calculate if current path is a folder directly from tree to ensure prop consistency
     const currentNode = useMemo(() => {
         if (!tree.length || !activePath) return null;
-        if (activePath === 'source_tree') return null; // Source tree view is special
+        if (activePath === 'source_tree' || activePath === 'local-render') return null; 
         return findNodeByPath(tree, activePath);
     }, [tree, activePath]);
 
@@ -89,8 +103,8 @@ const BlogApp: React.FC = () => {
                 return;
             }
 
-            if (activePath === 'source_tree') {
-                // Clear content for source tree view
+            if (activePath === 'source_tree' || activePath === 'local-render') {
+                // Clear content for special views
                 setMarkdownContent(null);
                 return;
             }
@@ -180,12 +194,16 @@ const BlogApp: React.FC = () => {
     const toggleToc = () => setIsTocOpen(!isTocOpen);
 
     const handleDownload = () => {
-        if (!markdownContent || !activePath) return;
-        const blob = new Blob([markdownContent], {type: 'text/markdown'});
+        const content = localRenderInfo ? localRenderInfo.content : markdownContent;
+        const name = localRenderInfo ? localRenderInfo.name : (activePath ? activePath.split('/').pop() : 'download.md');
+        
+        if (!content) return;
+        
+        const blob = new Blob([content], {type: 'text/markdown'});
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = activePath.split('/').pop() || 'download.md';
+        a.download = name || 'download.md';
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
@@ -216,14 +234,14 @@ const BlogApp: React.FC = () => {
                     <div className="flex items-center gap-3">
                         <div
                             className="p-2 bg-primary-100 rounded-lg text-primary-700 cursor-pointer"
-                            onClick={() => navigate('/')}
+                            onClick={handleHomeClick}
                         >
                             <BookOpen size={20}/>
                         </div>
                         {/* Added border-none and font-sans to override potentially conflicting github.css globals */}
                         <h1
                             className="font-bold text-lg tracking-tight text-slate-800 cursor-pointer border-none font-sans"
-                            onClick={() => navigate('/')}
+                            onClick={handleHomeClick}
                         >
                             Harvey Blocks' Space
                         </h1>
@@ -282,16 +300,18 @@ const BlogApp: React.FC = () => {
                             <Menu size={24}/>
                         </button>
                         <div className="flex flex-col">
-                            <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Currently Reading</span>
+                            <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
+                                {localRenderInfo ? 'Viewing Local File' : 'Currently Reading'}
+                            </span>
                             <h2 className="text-sm font-medium text-slate-700 truncate max-w-[200px] sm:max-w-md"
                                 style={{margin: "2px"}}>
-                                {activePath ? activePath.split('/').pop() : 'Home'}
+                                {localRenderInfo ? localRenderInfo.name : (activePath ? activePath.split('/').pop() : 'Home')}
                             </h2>
                         </div>
                     </div>
 
                     <div className="flex items-center gap-2">
-                        {activePath && activePath !== 'source_tree' && (
+                        {((activePath && !['source_tree', 'local-render'].includes(activePath)) || localRenderInfo) && (
                             <>
                                 <button
                                     onClick={handleDownload}
@@ -324,7 +344,15 @@ const BlogApp: React.FC = () => {
                 <div className="flex-1 flex overflow-hidden">
                     <div className="flex-1 overflow-y-auto scroll-smooth" id="scroll-container">
                         <div className="max-w-4xl mx-auto px-4 py-8 lg:px-12 lg:py-12">
-                            {!activePath ? (
+                            {localRenderInfo && activePath === 'local-render' ? (
+                                <div className="animate-in fade-in duration-500 slide-in-from-bottom-4">
+                                    <MarkdownRenderer 
+                                        content={localRenderInfo.content} 
+                                        filePath={localRenderInfo.name}
+                                        isFolder={false}
+                                    />
+                                </div>
+                            ) : !activePath ? (
                                 <div className="flex flex-col items-center justify-center h-[60vh] text-center px-4">
                                     <div
                                         className="w-20 h-20 bg-primary-50 rounded-full flex items-center justify-center mb-6 text-primary-300">
@@ -335,14 +363,30 @@ const BlogApp: React.FC = () => {
                                     <p className="text-slate-500 max-w-md mb-8">
                                         Select a document from the sidebar to explore Harvey's thoughts.
                                     </p>
-                                    <button
-                                        onClick={() => navigate('/source_tree')}
-                                        className="flex items-center gap-2 px-6 py-3 bg-white border border-slate-200 text-slate-700 rounded-lg hover:border-primary-300 hover:text-primary-600 hover:shadow-md transition-all duration-200 group"
-                                    >
-                                        <FolderTree size={20}
-                                                    className="text-slate-400 group-hover:text-primary-500 transition-colors"/>
-                                        <span className="font-medium">View Source Tree</span>
-                                    </button>
+                                    <div className="flex flex-col sm:flex-row gap-4">
+                                        <button
+                                            onClick={() => navigate('/source_tree')}
+                                            className="flex items-center gap-2 px-6 py-3 bg-white border border-slate-200 text-slate-700 rounded-lg hover:border-primary-300 hover:text-primary-600 hover:shadow-md transition-all duration-200 group"
+                                        >
+                                            <FolderTree size={20}
+                                                        className="text-slate-400 group-hover:text-primary-500 transition-colors"/>
+                                            <span className="font-medium">View Source Tree</span>
+                                        </button>
+                                        
+                                        <LocalMarkdownHandler 
+                                            onLocalRender={(content, name) => {
+                                                setLocalRenderInfo({ content, name });
+                                                navigate('/local-render');
+                                            }}
+                                            className="flex items-center gap-2 px-6 py-3 bg-white border border-slate-200 text-slate-700 rounded-lg hover:border-primary-300 hover:text-primary-600 hover:shadow-md transition-all duration-200 group w-full sm:w-auto"
+                                        >
+                                            <FileText size={20} className="text-slate-400 group-hover:text-primary-500 transition-colors" />
+                                            <span className="font-medium">Render Local Markdown</span>
+                                        </LocalMarkdownHandler>
+                                    </div>
+                                    <p className="mt-4 text-xs text-slate-400">
+                                        Or choose a local file to preview it instantly here.
+                                    </p>
                                 </div>
                             ) : activePath === 'source_tree' ? (
                                 <SourceTreeView nodes={tree}/>
@@ -359,11 +403,11 @@ const BlogApp: React.FC = () => {
                         </div>
                     </div>
 
-                    {/* Right TOC Sidebar (only for markdown files that are loaded) */}
-                    {activePath && activePath !== 'source_tree' && markdownContent && isTocOpen && !isCurrentPathFolder && (
+                    {/* Right TOC Sidebar */}
+                    {((activePath && !['source_tree', 'local-render'].includes(activePath) && markdownContent && !isCurrentPathFolder) || (localRenderInfo && activePath === 'local-render')) && isTocOpen && (
                         <div className="w-64 flex-shrink-0 border-l border-slate-200 bg-slate-50/50 hidden lg:block overflow-y-auto h-full">
                             <div className="p-4">
-                                <TableOfContents content={markdownContent}/>
+                                <TableOfContents content={localRenderInfo ? localRenderInfo.content : (markdownContent || '')}/>
                             </div>
                         </div>
                     )}
