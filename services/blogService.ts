@@ -46,30 +46,54 @@ export const fetchFileTree = async (): Promise<FileNode[]> => {
     }
 };
 
-export const fetchMarkdownContent = async (path: string): Promise<string> => {
-    try {
-        // Ensure path doesn't start with / to avoid double slashes
-        const cleanPath = path.startsWith('/') ? path.slice(1) : path;
-        const url = `${BASE_URL}/${cleanPath}`;
+export interface MarkdownFetchResult {
+    content: string;
+    actualPath: string;
+}
 
-        const response = await fetch(url);
-        if (!response.ok) {
-            throw new Error(`Status: ${response.status}`);
+export const fetchMarkdownContent = async (path: string): Promise<MarkdownFetchResult> => {
+    const tryFetch = async (targetPath: string): Promise<string | null> => {
+        try {
+            const cleanPath = targetPath.startsWith('/') ? targetPath.slice(1) : targetPath;
+            const url = `${BASE_URL}/${cleanPath}`;
+            const response = await fetch(url);
+            if (response.ok) {
+                return await response.text();
+            }
+            return null;
+        } catch (error) {
+            return null;
         }
-        return await response.text();
-    } catch (error) {
-        // Check for fallback content first before logging error
-        const filename = path.split('/').pop() || "";
-        if (filename in FALLBACK_CONTENT) {
-            // Return fallback silently
-            return FALLBACK_CONTENT[filename];
-        }
+    };
 
-        console.error(`Error fetching markdown for ${path}:`, error);
+    // 1. Try the original path
+    let content = await tryFetch(path);
+    if (content !== null) return { content, actualPath: path };
 
-        // Generic error message in markdown format
-        return `# Error Loading Content\n\nCould not fetch content for **${path}**.\n\nThis may happen if the file doesn't exist on the remote server or if you are viewing the fallback tree but the content map is missing this file.`;
+    // 2. If it failed and doesn't have an extension, try adding .md
+    const lastSegment = path.split('/').pop() || "";
+    if (!lastSegment.includes('.')) {
+        const mdPath = path + '.md';
+        content = await tryFetch(mdPath);
+        if (content !== null) return { content, actualPath: mdPath };
     }
+
+    // 3. Fallback logic if both failed
+    const filename = path.split('/').pop() || "";
+    if (filename in FALLBACK_CONTENT) {
+        return { content: FALLBACK_CONTENT[filename], actualPath: path };
+    }
+    
+    const mdFilename = filename + ".md";
+    if (mdFilename in FALLBACK_CONTENT) {
+        return { content: FALLBACK_CONTENT[mdFilename], actualPath: path + ".md" };
+    }
+
+    console.error(`Error fetching markdown for ${path}`);
+    return { 
+        content: `# Error Loading Content\n\nCould not fetch content for **${path}**.\n\nPlease check if the file exists on the remote server.`,
+        actualPath: path 
+    };
 };
 
 export const findNodeByPath = (nodes: FileNode[], path: string): FileNode | null => {
@@ -78,8 +102,15 @@ export const findNodeByPath = (nodes: FileNode[], path: string): FileNode | null
     let currentNodes = nodes;
     let result: FileNode | null = null;
 
-    for (const part of parts) {
-        const found = currentNodes.find(n => n.name === part);
+    for (let i = 0; i < parts.length; i++) {
+        const part = parts[i];
+        let found = currentNodes.find(n => n.name === part);
+        
+        // If not found and it's the last part (the file), try adding .md
+        if (!found && i === parts.length - 1 && !part.includes('.')) {
+            found = currentNodes.find(n => n.name === part + '.md');
+        }
+
         if (!found) return null;
         result = found;
         if (found.children) {

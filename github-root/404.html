@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>GitHub Pages Multi-Project Redirector</title>
+    <script type="text/javascript">
+        /**
+         * Global 404 Redirector for GitHub Pages Repository Root.
+         * This script identifies which sub-project triggered the 404 and redirects 
+         * back to that project's index.html with the path encoded as a parameter.
+         */
+        (function() {
+            var l = window.location;
+            var path = l.pathname;
+            var segments = path.split('/').filter(Boolean);
+            
+            // The first segment is ALWAYS the project name (one level deep)
+            var repoName = segments[0] || '';
+            
+            if (repoName) {
+                // Combine path and hash into one documentation pointer
+                var docPathWithHash = '/' + segments.slice(1).join('/') + l.hash;
+                
+                // Redirect back to project root with document path as parameter
+                var destination = l.protocol + '//' + l.hostname + (l.port ? ':' + l.port : '') +
+                                  '/' + repoName + '/?p=' + encodeURIComponent(docPathWithHash) +
+                                  (l.search ? '&q=' + l.search.slice(1).replace(/&/g, '~and~') : '');
+                
+                l.replace(destination);
+            }
+        })();
+    </script>
+</head>
+<body>
+    Redirecting to project...
+</body>
+</html>

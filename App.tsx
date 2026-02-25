@@ -23,8 +23,23 @@ const BlogApp: React.FC = () => {
     const location = useLocation();
     const navigate = useNavigate();
 
+    // 0. Handle initial URL restoration from 404.html redirect parameter 'p'
+    useEffect(() => {
+        const params = new URLSearchParams(location.search);
+        const p = params.get('p');
+        if (p) {
+            const decodedPath = decodeURIComponent(p);
+            // Remove the 'p' parameter and replace history state with the actual path
+            // This also handles any hash (#) that was included in 'p'
+            navigate(decodedPath, { replace: true });
+        }
+    }, []); // Run once on mount
+
     // Derived state from URL
-    const activePath = location.pathname.slice(1) ? decodeURIComponent(location.pathname.slice(1)) : null;
+    const activePath = useMemo(() => {
+        const path = location.pathname.slice(1);
+        return path ? decodeURIComponent(path) : null;
+    }, [location.pathname]);
 
     // 1. Responsive Sidebar Defaults
     useEffect(() => {
@@ -91,9 +106,10 @@ const BlogApp: React.FC = () => {
             if (isCurrentPathFolder) {
                 // Render a simple folder view
                 // We could look for a README.md inside, but for now we list children
-                const childrenList = currentNode.children?.map(child =>
-                    `- [${child.name}](${child.name})` // Relative link
-                ).join('\n');
+                const childrenList = currentNode.children?.map(child => {
+                    const icon = child.children ? '📂 ' : '📄 ';
+                    return `- [${icon}${child.name}](${child.name})`;
+                }).join('\n') || '*(Empty folder)*';
 
                 // Add back link. Since we implemented ".." support in MarkdownRenderer, we can use it here.
                 const backLink = `[⬅️ Back to parent](..)\n\n`;
@@ -105,8 +121,15 @@ const BlogApp: React.FC = () => {
             // It's a file, fetch it
             setIsContentLoading(true);
             try {
-                const content = await fetchMarkdownContent(activePath);
+                const { content, actualPath } = await fetchMarkdownContent(activePath);
                 setMarkdownContent(content);
+
+                // If the fetch found a file with an extension (like .md), update the URL
+                if (actualPath !== activePath) {
+                    // Keep the current hash if it exists
+                    const currentHash = location.hash;
+                    navigate('/' + actualPath + currentHash, { replace: true });
+                }
 
                 // Mobile UX: Close sidebar on selection
                 if (window.innerWidth < 1024) {
@@ -345,9 +368,19 @@ const BlogApp: React.FC = () => {
 };
 
 const App: React.FC = () => {
-    // Check if we are running in a restricted environment (like a blob sandbox)
-    // where modifying location (HashRouter) might cause "Location.assign" access denied errors.
+    // Check for sandbox environments (like blob sandboxes)
     const isSandbox = typeof window !== 'undefined' && window.location.protocol === 'blob:';
+
+    // Calculate basename dynamically: assume first level is project name in production
+    const baseName = useMemo(() => {
+        if (import.meta.env.DEV) return '/';
+        
+        const path = window.location.pathname;
+        const segments = path.split('/').filter(Boolean);
+        
+        // Return first segment as project root (e.g., /project-name)
+        return segments.length > 0 ? '/' + segments[0] : '/';
+    }, []);
 
     return (
         isSandbox ? (
@@ -355,7 +388,7 @@ const App: React.FC = () => {
                 <BlogApp/>
             </MemoryRouter>
         ) : (
-            <BrowserRouter>
+            <BrowserRouter basename={baseName}>
                 <BlogApp/>
             </BrowserRouter>
         )

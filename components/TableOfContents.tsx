@@ -14,7 +14,7 @@ interface TocItem {
 
 export const TableOfContents: React.FC<TableOfContentsProps> = ({ content, className = '' }) => {
   const headings = useMemo(() => {
-    // Initialize GithubSlugger to handle duplicates and special characters (like Chinese)
+    // Initialize GithubSlugger to handle duplicates and special characters
     // exactly how rehype-slug does it.
     const slugger = new GithubSlugger();
     const lines = content.split('\n');
@@ -58,7 +58,7 @@ export const TableOfContents: React.FC<TableOfContentsProps> = ({ content, class
   return (
     <nav className={`my-8 ${className}`}>
       <h3 className="text-xl font-bold text-gray-900 mb-4 px-2">
-        TOF
+        Table of Contents
       </h3>
       <div className="flex flex-col space-y-1">
         {headings.map((heading) => (

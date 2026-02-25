@@ -8,6 +8,7 @@ import rehypeRaw from 'rehype-raw';
 import rehypeSlug from 'rehype-slug';
 import {visit} from 'unist-util-visit';
 import {useNavigate} from 'react-router-dom';
+import {ImageOff, AlertCircle} from 'lucide-react';
 import {DiagramRenderer} from './DiagramRenderer';
 import {CodeBlock} from './CodeBlock';
 
@@ -29,7 +30,7 @@ interface MarkdownRendererProps {
 const resolveRelativePath = (baseFile: string, relativeUrl: string, isFolder: boolean = false) => {
     if (!relativeUrl) return '';
 
-    // 1. Decode the URL first (handle encoded characters like Chinese or spaces)
+    // 1. Decode the URL first
     let decodedUrl = relativeUrl;
     try {
         decodedUrl = decodeURIComponent(relativeUrl);
@@ -37,24 +38,27 @@ const resolveRelativePath = (baseFile: string, relativeUrl: string, isFolder: bo
         console.warn('Failed to decode relative URL:', relativeUrl);
     }
 
-    // 2. Normalize slashes: replace backslash with forward slash
-    let normalizedUrl = decodedUrl.replace(/\\/g, '/');
+    // 2. Separate path from hash
+    const hashIndex = decodedUrl.indexOf('#');
+    let pathPart = hashIndex !== -1 ? decodedUrl.slice(0, hashIndex) : decodedUrl;
+    const hashPart = hashIndex !== -1 ? decodedUrl.slice(hashIndex) : '';
 
-    // 3. Collapse multiple slashes into one
+    // 3. Normalize slashes
+    let normalizedUrl = pathPart.replace(/\\/g, '/');
+
+    // 4. Collapse multiple slashes
     normalizedUrl = normalizedUrl.replace(/\/+/g, '/');
 
-    // 4. Handle leading slash: treat as relative to current directory per specific requirement
-    // "/aaa/bbb.md" -> "aaa/bbb.md" (relative to base)
+    // 5. Handle leading slash: treat as relative to current directory
     if (normalizedUrl.startsWith('/')) {
         normalizedUrl = normalizedUrl.slice(1);
     }
 
     // Split base path into parts
-    // Filter boolean removes empty strings from double slashes or start/end
     const baseDirParts = baseFile.split('/').filter(Boolean);
 
     if (!isFolder) {
-        // If it's a file path (e.g. a/b/c.md), the context is the folder (a/b)
+        // If it's a file path, the context is the folder
         baseDirParts.pop();
     }
 
@@ -62,21 +66,19 @@ const resolveRelativePath = (baseFile: string, relativeUrl: string, isFolder: bo
 
     for (const part of relativeParts) {
         if (part === '.') {
-            // Current directory, do nothing
             continue;
         }
         if (part === '..') {
-            // Parent directory, pop from base
             if (baseDirParts.length > 0) {
                 baseDirParts.pop();
             }
         } else {
-            // Normal path segment
             baseDirParts.push(part);
         }
     }
 
-    return baseDirParts.join('/');
+    // 6. Reconstruct path and append hash
+    return baseDirParts.join('/') + hashPart;
 };
 
 /**
@@ -119,7 +121,7 @@ function visitorFactory(supMark: string, supHtmlTag: string) {
 
 const remarkMark: () => (tree: any) => void = (): (any) => void => {
     return (tree: any): void => {
-        // 1. 定义前后缀
+        // 1. Define prefix and suffix
         let visitor = visitorFactory('==', 'mark');
         visit(tree, 'text', visitor);
     };
@@ -127,7 +129,7 @@ const remarkMark: () => (tree: any) => void = (): (any) => void => {
 
 const remarkSup: () => (tree: any) => void = (): (any) => void => {
     return (tree: any): void => {
-        // 1. 定义前后缀
+        // 1. Define prefix and suffix
         let visitor = visitorFactory('^', 'sup');
         visit(tree, 'text', visitor);
     };
@@ -135,15 +137,45 @@ const remarkSup: () => (tree: any) => void = (): (any) => void => {
 
 const remarkDel: () => (tree: any) => void = (): (any) => void => {
     return (tree: any): void => {
-        // 1. 定义前后缀
+        // 1. Define prefix and suffix
         let visitor = visitorFactory('~~', 'del');
         visit(tree, 'text', visitor);
     };
 };
 
+import {useState} from 'react';
 import {TableOfContents} from './TableOfContents';
 import {ImageViewer} from './ImageViewer';
-import {useState} from 'react';
+
+/**
+ * Image component with error handling fallback.
+ */
+const SafeImage: React.FC<{ src: string; alt: string; onClick?: (src: string) => void }> = ({ src, alt, onClick }) => {
+    const [hasError, setHasError] = useState(false);
+
+    if (hasError) {
+        return (
+            <div className="flex flex-col items-center justify-center p-8 bg-slate-50 border border-slate-200 rounded-lg text-slate-400 my-4">
+                <ImageOff size={48} className="mb-2 opacity-50" />
+                <span className="text-sm font-medium">Image failed to load</span>
+                {alt && <span className="text-xs mt-1 italic">"{alt}"</span>}
+            </div>
+        );
+    }
+
+    return (
+        <img 
+            src={src} 
+            alt={alt} 
+            className="cursor-zoom-in max-w-full h-auto transition-transform hover:scale-[1.02]"
+            onError={() => setHasError(true)}
+            onClick={(e) => {
+                e.stopPropagation();
+                if (onClick) onClick(src);
+            }}
+        />
+    );
+};
 
 export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({content, filePath, isFolder = false}) => {
     const navigate = useNavigate();
@@ -159,16 +191,7 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({content, file
 
     const components = {
         img: ({src, alt, ...props}: any) => (
-            <img 
-               src={src} 
-               alt={alt} 
-               {...props} 
-               className="cursor-zoom-in max-w-full h-auto transition-transform hover:scale-[1.02]"
-               onClick={(e) => {
-                   e.stopPropagation();
-                   handleImageClick(src);
-               }}
-           />
+            <SafeImage src={src} alt={alt} onClick={handleImageClick} />
        ),
         p: ({children, ...props}: any) => {
             if (typeof children === 'string' && children.trim().toUpperCase() === '[TOC]') {
@@ -270,12 +293,21 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({content, file
             if (href.startsWith('#')) {
                 const handleClick = (e: React.MouseEvent) => {
                     e.preventDefault();
-                    const id = href.slice(1);
+                    // Decode the ID to handle Chinese characters and other symbols correctly
+                    const id = decodeURIComponent(href.slice(1));
                     const el = document.getElementById(id);
                     if (el) {
                         el.scrollIntoView({behavior: 'smooth'});
-                        // Update URL hash without jumping
+                        // Update URL hash without jumping the page instantly
                         window.history.pushState(null, '', `#${id}`);
+                    } else {
+                        // Fallback: if decoded ID fails, try the raw ID
+                        const rawId = href.slice(1);
+                        const rawEl = document.getElementById(rawId);
+                        if (rawEl) {
+                            rawEl.scrollIntoView({behavior: 'smooth'});
+                            window.history.pushState(null, '', `#${rawId}`);
+                        }
                     }
                 };
                 return (
