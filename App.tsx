@@ -1,6 +1,6 @@
 import React, {useEffect, useState, useCallback, useMemo} from 'react';
 import {BrowserRouter, MemoryRouter, Routes, Route, useLocation, useNavigate} from 'react-router-dom';
-import {Menu, X, BookOpen, Github, Download, List, FolderTree} from 'lucide-react';
+import {Menu, X, BookOpen, Github, Download, List, FolderTree, Folder, FileText, ArrowLeft} from 'lucide-react';
 import {fetchFileTree, fetchMarkdownContent, findNodeByPath, BLOG_REPO_URL} from './services/blogService';
 import {FileNode} from './types';
 import {FileTreeItem} from './components/FileTree';
@@ -106,15 +106,21 @@ const BlogApp: React.FC = () => {
             if (isCurrentPathFolder) {
                 // Render a simple folder view
                 // We could look for a README.md inside, but for now we list children
+                
+                // For folder content, we'll manually render it in the MarkdownRenderer but we need to pass a structured content
+                // Since MarkdownRenderer is already used, we'll keep using it with markdown strings.
+                
                 const childrenList = currentNode.children?.map(child => {
-                    const icon = child.children ? '📂 ' : '📄 ';
-                    return `- [${icon}${child.name}](${child.name})`;
+                    const icon = child.children ? 'Folder ' : 'FileText ';
+                    // We'll use a special marker to replace with icons in MarkdownRenderer or just use text for now
+                    // Actually, the user wants icons everywhere. 
+                    // Let's use standard markdown and see if we can improve it.
+                    return `- [${child.name}](${child.name})`;
                 }).join('\n') || '*(Empty folder)*';
 
-                // Add back link. Since we implemented ".." support in MarkdownRenderer, we can use it here.
-                const backLink = `[⬅️ Back to parent](..)\n\n`;
+                const backLink = `[Back to parent](..)\n\n`;
 
-                setMarkdownContent(`# 📂 ${currentNode.name}\n\n${backLink}Select a file from this folder:\n\n${childrenList}`);
+                setMarkdownContent(`# ${currentNode.name}\n\n${backLink}Select a file from this folder:\n\n${childrenList}`);
                 return;
             }
 

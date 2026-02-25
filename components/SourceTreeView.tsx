@@ -1,6 +1,7 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { FileNode } from '../types';
+import { Folder, FileText } from 'lucide-react';
 
 interface SourceTreeViewProps {
   nodes: FileNode[];
@@ -14,7 +15,7 @@ const TreeNode: React.FC<{ node: FileNode; pathPrefix: string }> = ({ node, path
     return (
       <div className="ml-4 my-2">
         <div className="font-semibold text-slate-800 flex items-center gap-2 select-none">
-          <span className="text-yellow-500">📁</span> {node.name}
+          <Folder size={20} className="text-yellow-500" /> {node.name}
         </div>
         <div className="border-l-2 border-slate-100 ml-2 pl-2">
           {node.children?.map((child, idx) => (
@@ -29,9 +30,9 @@ const TreeNode: React.FC<{ node: FileNode; pathPrefix: string }> = ({ node, path
     <div className="ml-4 my-1">
       <Link 
         to={`/${currentPath}`}
-        className="text-slate-600 hover:text-primary-600 hover:underline flex items-center gap-2 transition-colors decoration-slate-300 hover:decoration-primary-300 underline-offset-4"
+        className="text-slate-600 hover:text-primary-600 hover:underline flex items-center gap-3 transition-colors decoration-slate-300 hover:decoration-primary-300 underline-offset-4 py-1"
       >
-        <span className="text-slate-400">📄</span> {node.name}
+        <FileText size={20} className="text-slate-400" /> {node.name}
       </Link>
     </div>
   );

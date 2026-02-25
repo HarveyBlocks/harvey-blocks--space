@@ -8,15 +8,13 @@ import rehypeRaw from 'rehype-raw';
 import rehypeSlug from 'rehype-slug';
 import {visit} from 'unist-util-visit';
 import {useNavigate} from 'react-router-dom';
-import {ImageOff, AlertCircle} from 'lucide-react';
+import {ImageOff, AlertCircle, Folder, FileText, ArrowLeft} from 'lucide-react';
 import {DiagramRenderer} from './DiagramRenderer';
 import {CodeBlock} from './CodeBlock';
-
-interface MarkdownRendererProps {
-    content: string;
-    filePath: string;
-    isFolder?: boolean;
-}
+import {useState} from 'react';
+import {TableOfContents} from './TableOfContents';
+import {ImageViewer} from './ImageViewer';
+import ReactDOMServer from 'react-dom/server';
 
 /**
  * Helper to resolve relative paths
@@ -143,9 +141,11 @@ const remarkDel: () => (tree: any) => void = (): (any) => void => {
     };
 };
 
-import {useState} from 'react';
-import {TableOfContents} from './TableOfContents';
-import {ImageViewer} from './ImageViewer';
+interface MarkdownRendererProps {
+    content: string;
+    filePath: string;
+    isFolder?: boolean;
+}
 
 /**
  * Image component with error handling fallback.
@@ -190,6 +190,17 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({content, file
     };
 
     const components = {
+        h1: ({children, ...props}: any) => {
+            if (isFolder) {
+                return (
+                    <h1 {...props} className="flex items-center gap-2">
+                        <Folder className="text-primary-500" size={28} />
+                        {children}
+                    </h1>
+                );
+            }
+            return <h1 {...props}>{children}</h1>;
+        },
         img: ({src, alt, ...props}: any) => (
             <SafeImage src={src} alt={alt} onClick={handleImageClick} />
        ),
@@ -289,6 +300,30 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({content, file
                 );
             }
 
+            // Custom Folder UI logic
+            let icon: React.ReactNode = null;
+            let label = children;
+
+            if (isFolder) {
+                if (href === '..') {
+                    icon = <ArrowLeft size={18} className="inline mr-2 text-primary-500" />;
+                } else {
+                    // Check if it's a folder link we generated in App.tsx
+                    // Note: This is a bit brittle as it depends on the text content
+                    // But for the generated folder view, it works.
+                    const isParentFolder = children && Array.isArray(children) && children.some((c: any) => c?.props?.children === 'Back to parent');
+                    
+                    if (isParentFolder) {
+                        icon = <ArrowLeft size={18} className="inline mr-2 text-primary-500" />;
+                    } else {
+                        // For other links in folder view, we assume they are children
+                        // We'll use FileText for files and maybe detect folders if possible
+                        // In App.tsx we didn't pass enough info, but we can check if it looks like a file
+                        icon = <FileText size={18} className="inline mr-2 text-slate-400" />;
+                    }
+                }
+            }
+
             // 2. Anchors (within same page)
             if (href.startsWith('#')) {
                 const handleClick = (e: React.MouseEvent) => {
@@ -312,7 +347,7 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({content, file
                 };
                 return (
                     <a href={href} onClick={handleClick} {...props}>
-                        {children}
+                        {icon}{label}
                     </a>
                 );
             }
@@ -332,7 +367,7 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({content, file
 
             return (
                 <a href={href} onClick={handleClick} {...props}>
-                    {children}
+                    {icon}{label}
                 </a>
             );
         },
