@@ -20,6 +20,8 @@ export const DiagramRenderer: React.FC<DiagramRendererProps> = ({ code, language
     const [loading, setLoading] = useState(false);
     const [viewerOpen, setViewerOpen] = useState(false);
     
+    const [isDownloading, setIsDownloading] = useState(false);
+    
     // Unique ID for mermaid to avoid conflicts if multiple diagrams exist
     const containerId = useRef(`diagram-${Math.random().toString(36).substr(2, 9)}`);
 
@@ -76,8 +78,9 @@ export const DiagramRenderer: React.FC<DiagramRendererProps> = ({ code, language
         };
     }, [code, language, isPreview]);
 
-    const handleDownload = async (format: 'svg' | 'png' | 'jpeg') => {
+    const handleDownload = async (format: 'svg' | 'png' | 'jpeg', scale: number = 1, quality: number = 0.92) => {
         let svgString = '';
+        setIsDownloading(true);
 
         try {
             if (language === 'mermaid') {
@@ -88,7 +91,10 @@ export const DiagramRenderer: React.FC<DiagramRendererProps> = ({ code, language
                 svgString = await response.text();
             }
 
-            if (!svgString) return;
+            if (!svgString) {
+                setIsDownloading(false);
+                return;
+            }
 
             const filename = `diagram-${Date.now()}.${format}`;
 
@@ -102,6 +108,7 @@ export const DiagramRenderer: React.FC<DiagramRendererProps> = ({ code, language
                 a.click();
                 document.body.removeChild(a);
                 URL.revokeObjectURL(url);
+                setIsDownloading(false);
             } else {
                 const canvas = document.createElement('canvas');
                 const ctx = canvas.getContext('2d');
@@ -111,18 +118,22 @@ export const DiagramRenderer: React.FC<DiagramRendererProps> = ({ code, language
                 const url = URL.createObjectURL(svgBlob);
                 
                 img.onload = () => {
-                    // Set canvas size to match image
-                    canvas.width = img.width;
-                    canvas.height = img.height;
+                    // Set canvas size with scale
+                    canvas.width = img.width * scale;
+                    canvas.height = img.height * scale;
                     
                     if (ctx) {
-                         // Fill white background for JPEG/PNG (to ensure transparency is white)
+                         // Fill white background for JPEG/PNG (to ensure transparency is white if needed)
                          ctx.fillStyle = '#FFFFFF';
                          ctx.fillRect(0, 0, canvas.width, canvas.height);
                         
-                        ctx.drawImage(img, 0, 0);
+                        // Enable high-quality image smoothing
+                        ctx.imageSmoothingEnabled = true;
+                        ctx.imageSmoothingQuality = 'high';
+                        
+                        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
                         const mimeType = format === 'png' ? 'image/png' : 'image/jpeg';
-                        const dataUrl = canvas.toDataURL(mimeType);
+                        const dataUrl = canvas.toDataURL(mimeType, format === 'jpeg' ? quality : undefined);
                         
                         const a = document.createElement('a');
                         a.href = dataUrl;
@@ -132,6 +143,13 @@ export const DiagramRenderer: React.FC<DiagramRendererProps> = ({ code, language
                         document.body.removeChild(a);
                     }
                     URL.revokeObjectURL(url);
+                    setIsDownloading(false);
+                };
+                
+                img.onerror = () => {
+                    URL.revokeObjectURL(url);
+                    setIsDownloading(false);
+                    alert('Failed to process image for download.');
                 };
                 
                 img.src = url;
@@ -139,6 +157,7 @@ export const DiagramRenderer: React.FC<DiagramRendererProps> = ({ code, language
         } catch (e) {
             console.error('Download failed:', e);
             alert('Failed to download diagram.');
+            setIsDownloading(false);
         }
     };
 

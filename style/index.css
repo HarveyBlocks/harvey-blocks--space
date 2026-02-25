@@ -41,6 +41,16 @@ html, body {
     to { transform: translateY(0); opacity: 1; }
 }
 
+@keyframes zoomIn {
+    from { transform: scale(0.95); opacity: 0; }
+    to { transform: scale(1); opacity: 1; }
+}
+
+@keyframes slideInFromRight {
+    from { transform: translateX(0.5rem); opacity: 0; }
+    to { transform: translateX(0); opacity: 1; }
+}
+
 .animate-in {
     animation-duration: 0.5s;
     animation-fill-mode: both;
@@ -49,6 +59,15 @@ html, body {
 
 .fade-in {
     animation-name: fadeIn;
+}
+
+.zoom-in-95 {
+    animation-name: zoomIn;
+}
+
+.slide-in-from-right-2 {
+    animation-name: slideInFromRight;
+    animation-duration: 0.2s;
 }
 
 .slide-in-from-bottom-4 {

@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Check, Copy, Download, Code, Eye, ChevronDown } from 'lucide-react';
+import { Check, Copy, Download, Code, Eye, ChevronDown, Settings, Info, Loader2 } from 'lucide-react';
 
 interface CodeBlockProps {
     language: string;
@@ -8,7 +8,7 @@ interface CodeBlockProps {
     isDiagram?: boolean;
     isPreview?: boolean; // For diagrams: true = preview, false = source
     onTogglePreview?: () => void;
-    onDownload?: (format: 'svg' | 'png' | 'jpeg') => void;
+    onDownload?: (format: 'svg' | 'png' | 'jpeg', scale?: number, quality?: number) => void;
 }
 
 export const CodeBlock: React.FC<CodeBlockProps> = ({
@@ -22,6 +22,12 @@ export const CodeBlock: React.FC<CodeBlockProps> = ({
 }) => {
     const [copied, setCopied] = useState(false);
     const [showDownloadMenu, setShowDownloadMenu] = useState(false);
+    const [showSettings, setShowSettings] = useState(false);
+    const [exportFormat, setExportFormat] = useState<'png' | 'jpeg'>('png');
+    const [exportScale, setExportScale] = useState(2);
+    const [exportQuality, setExportQuality] = useState(0.92);
+    const [isDownloading, setIsDownloading] = useState(false);
+    
     const downloadMenuRef = useRef<HTMLDivElement>(null);
 
     const handleCopy = async () => {
@@ -31,6 +37,27 @@ export const CodeBlock: React.FC<CodeBlockProps> = ({
             setTimeout(() => setCopied(false), 2000);
         } catch (err) {
             console.error('Failed to copy:', err);
+        }
+    };
+
+    const handleDownloadClick = (format: 'svg' | 'png' | 'jpeg') => {
+        if (format === 'svg') {
+            onDownload?.('svg');
+            setShowDownloadMenu(false);
+        } else {
+            setExportFormat(format);
+            setShowSettings(true);
+        }
+    };
+
+    const executeDownload = async () => {
+        setIsDownloading(true);
+        try {
+            await onDownload?.(exportFormat, exportScale, exportQuality);
+        } finally {
+            setIsDownloading(false);
+            setShowSettings(false);
+            setShowDownloadMenu(false);
         }
     };
 
@@ -96,25 +123,100 @@ export const CodeBlock: React.FC<CodeBlockProps> = ({
                             </button>
                             
                             {showDownloadMenu && (
-                                <div className="absolute right-0 top-full mt-1 min-w-[120px] bg-white border border-slate-200 rounded-md shadow-lg z-10 py-1 animate-in fade-in zoom-in-95 duration-100">
-                                    <button
-                                        onClick={() => { onDownload('svg'); setShowDownloadMenu(false); }}
-                                        className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 hover:text-teal-600"
-                                    >
-                                        SVG
-                                    </button>
-                                    <button
-                                        onClick={() => { onDownload('png'); setShowDownloadMenu(false); }}
-                                        className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 hover:text-teal-600"
-                                    >
-                                        PNG
-                                    </button>
-                                    <button
-                                        onClick={() => { onDownload('jpeg'); setShowDownloadMenu(false); }}
-                                        className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 hover:text-teal-600"
-                                    >
-                                        JPEG
-                                    </button>
+                                <div className="absolute right-0 top-full mt-1 min-w-[180px] bg-white border border-slate-200 rounded-md shadow-lg z-[60] py-1 animate-in fade-in zoom-in-95 duration-100 overflow-hidden">
+                                    {!showSettings ? (
+                                        <>
+                                            <button
+                                                onClick={() => handleDownloadClick('svg')}
+                                                className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 hover:text-teal-600 flex items-center justify-between group"
+                                            >
+                                                <span>SVG</span>
+                                                <span className="text-[10px] text-slate-400 group-hover:text-teal-500">Vector</span>
+                                            </button>
+                                            <button
+                                                onClick={() => handleDownloadClick('png')}
+                                                className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 hover:text-teal-600 flex items-center justify-between group"
+                                            >
+                                                <span>PNG</span>
+                                                <ChevronDown size={14} className="text-slate-300 group-hover:text-teal-400" />
+                                            </button>
+                                            <button
+                                                onClick={() => handleDownloadClick('jpeg')}
+                                                className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 hover:text-teal-600 flex items-center justify-between group"
+                                            >
+                                                <span>JPEG</span>
+                                                <ChevronDown size={14} className="text-slate-300 group-hover:text-teal-400" />
+                                            </button>
+                                        </>
+                                    ) : (
+                                        <div className="p-3 space-y-4 animate-in slide-in-from-right-2 duration-200">
+                                            {/* Header with back button */}
+                                            <div className="flex items-center gap-2 border-b border-slate-100 pb-2 mb-2">
+                                                <button 
+                                                    onClick={() => setShowSettings(false)}
+                                                    className="p-1 hover:bg-slate-100 rounded text-slate-400 hover:text-slate-600"
+                                                >
+                                                    <ChevronDown size={14} className="rotate-90" />
+                                                </button>
+                                                <span className="text-xs font-bold text-slate-700 uppercase">{exportFormat} Settings</span>
+                                            </div>
+
+                                            {/* Scale */}
+                                            <div className="space-y-2">
+                                                <div className="flex justify-between items-center">
+                                                    <label className="text-[10px] font-bold text-slate-500 uppercase">Scale</label>
+                                                    <span className="text-[10px] font-mono text-teal-600 bg-teal-50 px-1 rounded">{exportScale}x</span>
+                                                </div>
+                                                <div className="grid grid-cols-4 gap-1">
+                                                    {[1, 2, 4, 8].map(s => (
+                                                        <button 
+                                                            key={s}
+                                                            onClick={() => setExportScale(s)}
+                                                            className={`text-[10px] py-1 rounded border ${exportScale === s ? 'bg-teal-50 border-teal-200 text-teal-700' : 'bg-white border-slate-100 text-slate-500'}`}
+                                                        >
+                                                            {s}x
+                                                        </button>
+                                                    ))}
+                                                </div>
+                                            </div>
+
+                                            {/* Quality for JPEG */}
+                                            {exportFormat === 'jpeg' && (
+                                                <div className="space-y-2">
+                                                    <div className="flex justify-between items-center">
+                                                        <label className="text-[10px] font-bold text-slate-500 uppercase">Quality</label>
+                                                        <span className="text-[10px] font-mono text-teal-600 bg-teal-50 px-1 rounded">{Math.round(exportQuality * 100)}%</span>
+                                                    </div>
+                                                    <input 
+                                                        type="range" min="0.1" max="1" step="0.1" 
+                                                        value={exportQuality} 
+                                                        onChange={(e) => setExportQuality(parseFloat(e.target.value))}
+                                                        className="w-full h-1 bg-slate-100 rounded-lg appearance-none cursor-pointer accent-teal-600"
+                                                    />
+                                                </div>
+                                            )}
+
+                                            {/* Recommendations Info */}
+                                            <div className="bg-blue-50/50 p-2 rounded border border-blue-100/50">
+                                                <div className="flex items-center gap-1 text-blue-600 mb-1">
+                                                    <Info size={10} />
+                                                    <span className="text-[9px] font-bold uppercase">Tips</span>
+                                                </div>
+                                                <p className="text-[9px] text-blue-500 leading-tight">
+                                                    Use 2x for Retina screens, 4x+ for printing.
+                                                </p>
+                                            </div>
+
+                                            <button
+                                                onClick={executeDownload}
+                                                disabled={isDownloading}
+                                                className="w-full py-1.5 bg-teal-600 hover:bg-teal-700 text-white rounded text-xs font-medium flex items-center justify-center gap-2 transition-colors disabled:opacity-50"
+                                            >
+                                                {isDownloading ? <Loader2 size={12} className="animate-spin" /> : <Download size={12} />}
+                                                {isDownloading ? 'Processing...' : 'Download'}
+                                            </button>
+                                        </div>
+                                    )}
                                 </div>
                             )}
                         </div>
