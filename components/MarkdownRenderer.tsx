@@ -274,6 +274,8 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({content, file
                     const el = document.getElementById(id);
                     if (el) {
                         el.scrollIntoView({behavior: 'smooth'});
+                        // Update URL hash without jumping
+                        window.history.pushState(null, '', `#${id}`);
                     }
                 };
                 return (

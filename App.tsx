@@ -1,5 +1,5 @@
 import React, {useEffect, useState, useCallback, useMemo} from 'react';
-import {HashRouter, MemoryRouter, Routes, Route, useLocation, useNavigate} from 'react-router-dom';
+import {BrowserRouter, MemoryRouter, Routes, Route, useLocation, useNavigate} from 'react-router-dom';
 import {Menu, X, BookOpen, Github, Download, List, FolderTree} from 'lucide-react';
 import {fetchFileTree, fetchMarkdownContent, findNodeByPath, BLOG_REPO_URL} from './services/blogService';
 import {FileNode} from './types';
@@ -121,6 +121,21 @@ const BlogApp: React.FC = () => {
 
         loadContent();
     }, [activePath, tree, isLoadingTree, currentNode, isCurrentPathFolder]);
+
+    // 4. Handle Hash Navigation (Anchor scrolling)
+    useEffect(() => {
+        if (!isContentLoading && markdownContent && location.hash) {
+            const id = decodeURIComponent(location.hash.slice(1));
+            // Small timeout to ensure DOM is fully rendered
+            const timer = setTimeout(() => {
+                const element = document.getElementById(id);
+                if (element) {
+                    element.scrollIntoView({ behavior: 'smooth' });
+                }
+            }, 500);
+            return () => clearTimeout(timer);
+        }
+    }, [isContentLoading, markdownContent, location.hash]);
 
     // Navigate handler for FileTree
     const handleNavigate = useCallback((path: string) => {
@@ -340,9 +355,9 @@ const App: React.FC = () => {
                 <BlogApp/>
             </MemoryRouter>
         ) : (
-            <HashRouter>
+            <BrowserRouter>
                 <BlogApp/>
-            </HashRouter>
+            </BrowserRouter>
         )
     );
 };
