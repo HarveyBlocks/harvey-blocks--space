@@ -78,8 +78,11 @@ const BlogApp: React.FC = () => {
     useEffect(() => {
         if (activePath !== 'local-render') {
             setLocalRenderInfo(null);
+        } else if (!localRenderInfo) {
+            // Edge case: if user visits /local-render directly without data, go home
+            navigate('/', { replace: true });
         }
-    }, [activePath]);
+    }, [activePath, localRenderInfo, navigate]);
 
     const handleHomeClick = useCallback(() => {
         setLocalRenderInfo(null);
