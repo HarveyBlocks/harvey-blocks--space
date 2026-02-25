@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { Check, Copy, Download, Code, Eye, ChevronDown, Settings, Info, Loader2 } from 'lucide-react';
 
 interface CodeBlockProps {
@@ -27,8 +28,10 @@ export const CodeBlock: React.FC<CodeBlockProps> = ({
     const [exportScale, setExportScale] = useState(2);
     const [exportQuality, setExportQuality] = useState(0.92);
     const [isDownloading, setIsDownloading] = useState(false);
+    const [menuStyle, setMenuStyle] = useState<React.CSSProperties>({});
     
     const downloadMenuRef = useRef<HTMLDivElement>(null);
+    const downloadButtonRef = useRef<HTMLButtonElement>(null);
 
     const handleCopy = async () => {
         try {
@@ -50,6 +53,40 @@ export const CodeBlock: React.FC<CodeBlockProps> = ({
         }
     };
 
+    const toggleDownloadMenu = () => {
+        if (!showDownloadMenu && downloadButtonRef.current) {
+            const rect = downloadButtonRef.current.getBoundingClientRect();
+            const vWidth = window.innerWidth;
+            const vHeight = window.innerHeight;
+
+            // Simple quadrant detection: 
+            // If button is in the bottom half, expand UP.
+            // If button is in the right half, expand LEFT.
+            const isBottomHalf = rect.top > vHeight / 2;
+            const isRightHalf = rect.left > vWidth / 2;
+
+            const style: React.CSSProperties = {
+                position: 'fixed',
+                zIndex: 9999,
+                // If expanding up, align bottom of menu to top of button (with 8px gap)
+                // If expanding down, align top of menu to bottom of button (with 8px gap)
+                top: isBottomHalf ? rect.top - 8 : rect.bottom + 8,
+                // If expanding left, align right of menu to right of button
+                // If expanding right, align left of menu to left of button
+                left: isRightHalf ? rect.right : rect.left,
+                // Use transform ONLY for direction, separating it from animation scale
+                transform: `translate(${isRightHalf ? '-100%' : '0'}, ${isBottomHalf ? '-100%' : '0'})`,
+                pointerEvents: 'none', // Wrapper is transparent, don't block clicks
+            };
+            
+            setMenuStyle(style);
+        }
+        setShowDownloadMenu(!showDownloadMenu);
+        if (showDownloadMenu) {
+            setShowSettings(false);
+        }
+    };
+
     const executeDownload = async () => {
         setIsDownloading(true);
         try {
@@ -61,16 +98,35 @@ export const CodeBlock: React.FC<CodeBlockProps> = ({
         }
     };
 
-    // Close download menu when clicking outside
+    // Close download menu when clicking outside or scrolling
     useEffect(() => {
-        const handleClickOutside = (event: MouseEvent) => {
-            if (downloadMenuRef.current && !downloadMenuRef.current.contains(event.target as Node)) {
-                setShowDownloadMenu(false);
+        const handleClose = (event: MouseEvent | Event) => {
+            if (showDownloadMenu) {
+                // If it's a click event, check if it's inside the menu or on the button
+                if (event instanceof MouseEvent) {
+                    const isInsideMenu = downloadMenuRef.current && downloadMenuRef.current.contains(event.target as Node);
+                    const isInsideButton = downloadButtonRef.current && downloadButtonRef.current.contains(event.target as Node);
+                    if (!isInsideMenu && !isInsideButton) {
+                        setShowDownloadMenu(false);
+                        setShowSettings(false);
+                    }
+                } else {
+                    // For scroll events, we close the menu to avoid positioning drift
+                    setShowDownloadMenu(false);
+                    setShowSettings(false);
+                }
             }
         };
-        document.addEventListener('mousedown', handleClickOutside);
-        return () => document.removeEventListener('mousedown', handleClickOutside);
-    }, []);
+
+        document.addEventListener('mousedown', handleClose);
+        // Using capture: true to ensure we catch scrolls in overflow containers
+        window.addEventListener('scroll', handleClose, true);
+        
+        return () => {
+            document.removeEventListener('mousedown', handleClose);
+            window.removeEventListener('scroll', handleClose, true);
+        };
+    }, [showDownloadMenu]);
 
     return (
         <div className="my-6 border border-slate-200 rounded-lg overflow-hidden bg-white shadow-sm hover:shadow-md transition-shadow duration-200 group">
@@ -113,17 +169,25 @@ export const CodeBlock: React.FC<CodeBlockProps> = ({
 
                     {/* Download Button (Diagrams only) */}
                     {isDiagram && onDownload && (
-                        <div className="relative" ref={downloadMenuRef}>
+                        <div className="relative">
                             <button
-                                onClick={() => setShowDownloadMenu(!showDownloadMenu)}
-                                className="p-1.5 text-slate-400 hover:text-teal-600 hover:bg-teal-50 rounded-md transition-colors flex items-center gap-1"
+                                ref={downloadButtonRef}
+                                onClick={toggleDownloadMenu}
+                                className={`p-1.5 rounded-md transition-colors flex items-center gap-1 ${
+                                    showDownloadMenu ? 'text-teal-600 bg-teal-50' : 'text-slate-400 hover:text-teal-600 hover:bg-teal-50'
+                                }`}
                                 title="Download Diagram"
                             >
                                 <Download size={18} />
                             </button>
                             
-                            {showDownloadMenu && (
-                                <div className="absolute right-0 top-full mt-1 min-w-[180px] bg-white border border-slate-200 rounded-md shadow-lg z-[60] py-1 animate-in fade-in zoom-in-95 duration-100 overflow-hidden">
+                            {showDownloadMenu && createPortal(
+                                <div style={menuStyle}>
+                                    <div 
+                                        ref={downloadMenuRef}
+                                        style={{ pointerEvents: 'auto' }}
+                                        className="min-w-[180px] bg-white border border-slate-200 rounded-md shadow-xl py-1 animate-in fade-in zoom-in-95 duration-100 overflow-hidden"
+                                    >
                                     {!showSettings ? (
                                         <>
                                             <button
@@ -218,6 +282,8 @@ export const CodeBlock: React.FC<CodeBlockProps> = ({
                                         </div>
                                     )}
                                 </div>
+                                </div>,
+                                document.body
                             )}
                         </div>
                     )}
