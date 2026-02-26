@@ -300,7 +300,7 @@ export const CodeBlock: React.FC<CodeBlockProps> = ({
             </div>
 
             {/* Content */}
-            <div className={`relative ${!isDiagram ? 'bg-[#f6f8fa]' : ''}`}>
+            <div className={`relative ${!isDiagram || !isPreview ? 'bg-[#f6f8fa]' : ''}`}>
                 {children}
             </div>
         </div>

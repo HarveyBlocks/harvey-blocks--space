@@ -278,7 +278,7 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({content, file
             // Standard Code Block
             return (
                 <CodeBlock language={language} code={rawCode}>
-                    <pre {...props} className="!bg-transparent !border-0 !shadow-none !m-0 !p-4 font-mono text-sm overflow-auto max-h-[600px]">
+                    <pre {...props} className="!bg-transparent !border-0 !shadow-none !m-0 !p-4 font-mono text-sm overflow-auto max-h-[600px] !text-slate-800 !leading-relaxed">
                         {codeContent}
                     </pre>
                 </CodeBlock>
@@ -390,7 +390,18 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({content, file
         <div className="markdown-body">
             <ReactMarkdown
                 remarkPlugins={[remarkGfm, remarkMath, remarkMark, remarkDel, remarkSup]}
-                rehypePlugins={[rehypeRaw, rehypeKatex, rehypeHighlight, rehypeSlug]}
+                rehypePlugins={[
+                    rehypeRaw, 
+                    [rehypeKatex, { 
+                        throwOnError: false, 
+                        strict: (errorCode: string, errorMsg: string) => {
+                            // console.error(`[LaTeX] Syntax ERROR: ${errorMsg}`);
+                            return 'ignore';
+                        }
+                    }], 
+                    rehypeHighlight, 
+                    rehypeSlug
+                ]}
                 components={components}
             >
                 {content}

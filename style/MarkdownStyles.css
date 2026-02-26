@@ -181,6 +181,18 @@
     margin: 3em 0 !important;
 }
 
+/* Katex Error Handling */
+.katex-error {
+    color: #b91c1c !important; /* Red-700 */
+    background-color: #fef2f2 !important; /* Red-50 */
+    border: 1px solid #fecaca !important; /* Red-200 */
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 0.9em;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+}
+
+
 /* Custom Highlights */
 .markdown-body mark {
     background-color: #fef08a;

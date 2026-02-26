@@ -26,41 +26,101 @@ export const DiagramRenderer: React.FC<DiagramRendererProps> = ({ code, language
     const containerId = useRef(`diagram-${Math.random().toString(36).substr(2, 9)}`);
 
     useEffect(() => {
-        if (!isPreview) return;
+        if (!isPreview) {
+            setContent('');
+            setError(null);
+            return;
+        }
         
         let isMounted = true;
+        let lastRenderedCode = '';
 
         const render = async () => {
+            if (code === lastRenderedCode) return;
+            
             setLoading(true);
             setError(null);
             
             try {
                 if (language === 'mermaid') {
+                    lastRenderedCode = code;
+                    // Initialize for each render to ensure settings are fresh
                     mermaid.initialize({ 
                         startOnLoad: false,
                         theme: 'default',
                         securityLevel: 'loose',
+                        suppressErrorRendering: false, // Set to false to allow mermaid to render the error SVG into the DOM
                     });
+
+                    const id = `mermaid-${Math.random().toString(36).substring(2, 11)}`;
                     
-                    // Generate a unique ID for this render
-                    const id = `mermaid-${Math.random().toString(36).substr(2, 9)}`;
-                    
-                    // mermaid.render returns { svg } in newer versions
-                    const { svg } = await mermaid.render(id, code);
-                    
-                    if (isMounted) {
-                        setContent(svg);
+                    try {
+                        const { svg } = await mermaid.render(id, code);
+                        
+                        if (isMounted && svg) {
+                            // Fix for React negative width/height warnings
+                            // Use a more robust cleanup that doesn't break the SVG
+                            const cleanedSvg = svg
+                                .replace(/\b(width|height)\s*=\s*"-\d+[^"]*"/g, (match, prop) => {
+                                    return prop === 'width' ? 'width="100%"' : 'height="auto"';
+                                });
+                            
+                            setContent(cleanedSvg);
+                            setError(null);
+                        }
+                    } catch (err: any) {
+                        if (isMounted) {
+                            setError(err.message || 'Mermaid Syntax Error');
+                            
+                            // Try to capture the error SVG that mermaid might have generated in the DOM
+                            const captureErrorSvg = () => {
+                                const errorEl = document.getElementById(id) || document.getElementById(`d${id}`);
+                                if (errorEl) {
+                                    const svgContent = errorEl.outerHTML;
+                                    const cleanedErrorSvg = svgContent
+                                        .replace(/\b(width|height)\s*=\s*"-\d+[^"]*"/g, (match, prop) => {
+                                            return prop === 'width' ? 'width="100%"' : 'height="auto"';
+                                        });
+                                    setContent(cleanedErrorSvg);
+                                    errorEl.remove();
+                                    return true;
+                                }
+                                return false;
+                            };
+
+                            if (!captureErrorSvg()) {
+                                setTimeout(captureErrorSvg, 50);
+                            }
+                        }
+                    } finally {
+                        // Cleanup temporary elements
+                        const el = document.getElementById(id) || document.getElementById(`d${id}`);
+                        if (el) el.remove();
                     }
                 } else if (language === 'plantuml') {
-                    // PlantUML
+                    lastRenderedCode = code;
                     const encoded = plantumlEncoder.encode(code);
                     const url = `https://www.plantuml.com/plantuml/svg/${encoded}`;
-                    if (isMounted) {
-                        setContent(url);
+                    
+                    try {
+                        // Fetch the content instead of just setting the URL
+                        // This allows us to handle error SVGs in the response body
+                        const response = await fetch(url);
+                        const svgText = await response.text();
+                        
+                        if (isMounted) {
+                            setContent(svgText);
+                            setError(null);
+                        }
+                    } catch (err) {
+                        // If network fails entirely, fall back to setting URL directly
+                        if (isMounted) {
+                            setContent(''); // Clear content to avoid showing old chart
+                            setError('Network error: Failed to fetch PlantUML diagram');
+                        }
                     }
                 }
             } catch (err: any) {
-                console.error('Diagram render error:', err);
                 if (isMounted) {
                     setError(err.message || 'Failed to render diagram');
                 }
@@ -79,18 +139,10 @@ export const DiagramRenderer: React.FC<DiagramRendererProps> = ({ code, language
     }, [code, language, isPreview]);
 
     const handleDownload = async (format: 'svg' | 'png' | 'jpeg', scale: number = 1, quality: number = 0.92) => {
-        let svgString = '';
+        let svgString = content;
         setIsDownloading(true);
 
         try {
-            if (language === 'mermaid') {
-                svgString = content;
-            } else if (language === 'plantuml') {
-                // Fetch SVG content from URL
-                const response = await fetch(content);
-                svgString = await response.text();
-            }
-
             if (!svgString) {
                 setIsDownloading(false);
                 return;
@@ -155,7 +207,6 @@ export const DiagramRenderer: React.FC<DiagramRendererProps> = ({ code, language
                 img.src = url;
             }
         } catch (e) {
-            console.error('Download failed:', e);
             alert('Failed to download diagram.');
             setIsDownloading(false);
         }
@@ -171,55 +222,45 @@ export const DiagramRenderer: React.FC<DiagramRendererProps> = ({ code, language
             onDownload={handleDownload}
         >
             {isPreview ? (
-                <div className="p-4 flex justify-center overflow-auto w-full min-h-[100px] bg-white">
+                <div className="p-4 flex justify-center overflow-auto w-full min-h-[100px] max-h-[500px] bg-white">
                     {loading ? (
                         <div className="flex flex-col items-center justify-center py-8 text-gray-400 animate-pulse">
                             <Loader2 className="animate-spin mb-2" size={24} />
                             <span className="text-sm">Rendering...</span>
                         </div>
                     ) : error ? (
-                         <div className="w-full bg-red-50 border border-red-100 rounded p-4 text-sm text-red-600">
-                            <div className="flex items-center gap-2 font-semibold mb-2">
-                                <AlertTriangle size={16} />
-                                <span>Render Error</span>
+                        <div className="w-full flex flex-col gap-3">
+                            <div className="bg-red-50/80 border border-red-200 rounded-lg p-4 text-sm text-red-700 shadow-sm backdrop-blur-sm">
+                                <div className="flex items-center gap-2 font-bold mb-3 uppercase tracking-wider text-red-800">
+                                    <AlertTriangle size={18} className="text-red-600" />
+                                    <span>{language} Syntax Error</span>
+                                </div>
+                                <pre className="whitespace-pre-wrap font-mono text-xs overflow-x-auto bg-white/60 p-3 rounded-md border border-red-100/50 leading-relaxed">{error}</pre>
                             </div>
-                            <pre className="whitespace-pre-wrap font-mono text-xs overflow-x-auto">{error}</pre>
+                            
+                            {/* If Mermaid generated an error SVG, show it here but constrained */}
+                            {language === 'mermaid' && content && (
+                                <div 
+                                    className="mermaid-error-svg w-full flex justify-center overflow-hidden border border-slate-200 rounded-lg bg-slate-50/50 p-4 shadow-inner"
+                                    dangerouslySetInnerHTML={{ __html: content }} 
+                                />
+                            )}
                         </div>
-                    ) : language === 'mermaid' ? (
+                    ) : language === 'mermaid' || language === 'plantuml' ? (
                         <div 
-                            className="mermaid-diagram w-full flex justify-center cursor-zoom-in"
+                            className={`${language}-diagram w-full flex justify-center cursor-zoom-in`}
                             dangerouslySetInnerHTML={{ __html: content }} 
                             onClick={() => setViewerOpen(true)}
                         />
                     ) : (
-                        content ? (
-                            <img 
-                                src={content} 
-                                alt="PlantUML Diagram" 
-                                className="max-w-full h-auto object-contain cursor-zoom-in" 
-                                onClick={() => setViewerOpen(true)}
-                            />
-                        ) : null
+                        null
                     )}
                 </div>
             ) : (
-                <div className="bg-[#f6f8fa] text-[#1f2937] p-0 overflow-hidden">
-                     <ReactMarkdown
-                        components={{
-                            pre: ({node, children, ...props}: any) => (
-                                <pre {...props} className="!p-4 !m-0 !bg-transparent !border-0 !shadow-none font-mono text-sm overflow-auto max-h-[500px]">
-                                    {children}
-                                </pre>
-                            ),
-                            code: ({node, inline, className, children, ...props}: any) => (
-                                <code className={className} {...props}>
-                                    {children}
-                                </code>
-                            )
-                        }}
-                     >
-                        {`\`\`\`${language}\n${code}\n\`\`\``}
-                     </ReactMarkdown>
+                <div className="bg-[#f6f8fa] p-4">
+                    <pre className="font-mono text-sm overflow-auto max-h-[600px] text-slate-800 leading-relaxed m-0">
+                        <code>{code}</code>
+                    </pre>
                 </div>
             )}
             
@@ -227,7 +268,7 @@ export const DiagramRenderer: React.FC<DiagramRendererProps> = ({ code, language
                 isOpen={viewerOpen}
                 onClose={() => setViewerOpen(false)}
                 content={content}
-                type={language === 'mermaid' ? 'svg' : 'image'}
+                type="svg"
             />
         </CodeBlock>
     );
