@@ -7,9 +7,40 @@ import { BlogSidebar } from './BlogSidebar';
 import { BlogHeader } from './BlogHeader';
 import { BlogContentArea } from './BlogContentArea';
 
+interface LocalRenderInfo {
+    name: string;
+    content: string;
+    checkpointContent: string;
+}
+
+const LOCAL_RENDER_STORAGE_KEY = 'hbs-local-render-v1';
+
 const buildFolderMarkdown = (node: FileNode) => {
     const childrenList = node.children?.map((child) => `- [${child.name}](${child.name})`).join('\n') || '*(Empty folder)*';
     return `# ${node.name}\n\n[Back to parent](..)\n\nSelect a file from this folder:\n\n${childrenList}`;
+};
+
+const loadStoredLocalRender = (): LocalRenderInfo | null => {
+    if (typeof window === 'undefined') return null;
+
+    try {
+        const raw = window.localStorage.getItem(LOCAL_RENDER_STORAGE_KEY);
+        if (!raw) return null;
+        const parsed = JSON.parse(raw) as LocalRenderInfo | null;
+        if (!parsed || typeof parsed.name !== 'string' || typeof parsed.content !== 'string') return null;
+        return {
+            name: parsed.name,
+            content: parsed.content,
+            checkpointContent: typeof parsed.checkpointContent === 'string' ? parsed.checkpointContent : parsed.content
+        };
+    } catch {
+        return null;
+    }
+};
+
+const saveStoredLocalRender = (data: LocalRenderInfo) => {
+    if (typeof window === 'undefined') return;
+    window.localStorage.setItem(LOCAL_RENDER_STORAGE_KEY, JSON.stringify(data));
 };
 
 export const BlogApp: React.FC = () => {
@@ -18,7 +49,8 @@ export const BlogApp: React.FC = () => {
     const [treeError, setTreeError] = useState<string | null>(null);
     const [markdownContent, setMarkdownContent] = useState<string | null>(null);
     const [isContentLoading, setIsContentLoading] = useState(false);
-    const [localRenderInfo, setLocalRenderInfo] = useState<{ name: string; content: string } | null>(null);
+    const [localRenderInfo, setLocalRenderInfo] = useState<LocalRenderInfo | null>(() => loadStoredLocalRender());
+    const [viewMode, setViewMode] = useState<'render' | 'source'>('render');
     const [isSidebarOpen, setIsSidebarOpen] = useState(true);
     const [isTocOpen, setIsTocOpen] = useState(true);
     const { theme, setTheme } = useThemeMode();
@@ -66,9 +98,25 @@ export const BlogApp: React.FC = () => {
     }, []);
 
     useEffect(() => {
-        if (activePath !== 'local-render') setLocalRenderInfo(null);
-        else if (!localRenderInfo) navigate('/', { replace: true });
+        if (activePath !== 'local-render' || localRenderInfo) return;
+        const stored = loadStoredLocalRender();
+        if (stored) {
+            setLocalRenderInfo(stored);
+            return;
+        }
+        navigate('/', { replace: true });
     }, [activePath, localRenderInfo, navigate]);
+
+    useEffect(() => {
+        if (!localRenderInfo) return;
+        saveStoredLocalRender(localRenderInfo);
+    }, [localRenderInfo]);
+
+    useEffect(() => {
+        if (!activePath || activePath === 'source_tree') {
+            setViewMode('render');
+        }
+    }, [activePath]);
 
     useEffect(() => {
         (async () => {
@@ -109,7 +157,7 @@ export const BlogApp: React.FC = () => {
     }, [isContentLoading, markdownContent, location.hash]);
 
     const handleHomeClick = useCallback(() => {
-        setLocalRenderInfo(null);
+        setViewMode('render');
         navigate('/');
     }, [navigate]);
 
@@ -118,10 +166,7 @@ export const BlogApp: React.FC = () => {
         document.getElementById('scroll-container')?.scrollTo({ top: 0 });
     }, [navigate]);
 
-    const handleDownload = useCallback(() => {
-        const content = localRenderInfo ? localRenderInfo.content : markdownContent;
-        const name = localRenderInfo ? localRenderInfo.name : activePath?.split('/').pop() || 'download.md';
-        if (!content) return;
+    const triggerMarkdownDownload = useCallback((content: string, name: string) => {
         const blob = new Blob([content], { type: 'text/markdown' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
@@ -131,7 +176,48 @@ export const BlogApp: React.FC = () => {
         a.click();
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
+    }, []);
+
+    const handleDownload = useCallback(() => {
+        const isLocalRoute = activePath === 'local-render';
+        const content = isLocalRoute ? localRenderInfo?.content : markdownContent;
+        const name = isLocalRoute ? localRenderInfo?.name || 'local-render.md' : activePath?.split('/').pop() || 'download.md';
+        if (!content) return;
+        triggerMarkdownDownload(content, name);
+
+        if (isLocalRoute) {
+            setLocalRenderInfo((prev) => {
+                if (!prev) return prev;
+                return { ...prev, checkpointContent: prev.content };
+            });
+        }
+    }, [activePath, localRenderInfo, markdownContent, triggerMarkdownDownload]);
+
+    const canToggleView = useMemo(() => {
+        if (!activePath || activePath === 'source_tree') return false;
+        if (activePath === 'local-render') return !!localRenderInfo;
+        return !!markdownContent;
     }, [activePath, localRenderInfo, markdownContent]);
+
+    const handleLocalSourceChange = useCallback((nextContent: string) => {
+        setLocalRenderInfo((prev) => {
+            if (!prev) return prev;
+            return { ...prev, content: nextContent };
+        });
+    }, []);
+
+    const handleLocalRender = useCallback((content: string, name: string) => {
+        if (localRenderInfo && localRenderInfo.content !== localRenderInfo.checkpointContent) {
+            const shouldDownload = window.confirm('Local source has changes since the last download. Download it before replacing?');
+            if (shouldDownload) {
+                triggerMarkdownDownload(localRenderInfo.content, localRenderInfo.name);
+            }
+        }
+
+        setLocalRenderInfo({ content, name, checkpointContent: content });
+        setViewMode('source');
+        navigate('/local-render');
+    }, [localRenderInfo, navigate, triggerMarkdownDownload]);
 
     return (
         <div className="flex h-screen overflow-hidden bg-slate-50 text-slate-900 font-sans dark:bg-slate-950 dark:text-slate-100">
@@ -150,13 +236,16 @@ export const BlogApp: React.FC = () => {
 
             <main className="flex-1 flex flex-col h-full overflow-hidden relative">
                 <BlogHeader
-                    localRenderName={localRenderInfo?.name || null}
+                    localRenderName={activePath === 'local-render' ? localRenderInfo?.name || null : null}
                     activePath={activePath}
                     isTocOpen={isTocOpen}
+                    viewMode={viewMode}
+                    canToggleView={canToggleView}
                     theme={theme}
                     onToggleTheme={() => setTheme((t) => (t === 'dark' ? 'light' : 'dark'))}
                     onToggleSidebar={() => setIsSidebarOpen((v) => !v)}
                     onToggleToc={() => setIsTocOpen((v) => !v)}
+                    onToggleViewMode={() => setViewMode((mode) => (mode === 'render' ? 'source' : 'render'))}
                     onDownload={handleDownload}
                 />
                 <BlogContentArea
@@ -166,12 +255,11 @@ export const BlogApp: React.FC = () => {
                     isCurrentPathFolder={isCurrentPathFolder}
                     isContentLoading={isContentLoading}
                     isTocOpen={isTocOpen}
+                    viewMode={viewMode}
                     localRenderInfo={localRenderInfo}
                     onOpenSourceTree={() => navigate('/source_tree')}
-                    onLocalRender={(content, name) => {
-                        setLocalRenderInfo({ content, name });
-                        navigate('/local-render');
-                    }}
+                    onLocalSourceChange={handleLocalSourceChange}
+                    onLocalRender={handleLocalRender}
                 />
             </main>
         </div>

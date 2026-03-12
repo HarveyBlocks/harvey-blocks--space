@@ -1,15 +1,18 @@
 import React from 'react';
-import { Menu, Github, Download, List, Moon, Sun } from 'lucide-react';
+import { Menu, Github, Download, List, Moon, Sun, Eye, Code2 } from 'lucide-react';
 import { BLOG_REPO_URL } from '../../services/blogService';
 
 interface BlogHeaderProps {
     localRenderName?: string | null;
     activePath: string | null;
     isTocOpen: boolean;
+    viewMode: 'render' | 'source';
+    canToggleView: boolean;
     theme: 'light' | 'dark';
     onToggleTheme: () => void;
     onToggleSidebar: () => void;
     onToggleToc: () => void;
+    onToggleViewMode: () => void;
     onDownload: () => void;
 }
 
@@ -17,10 +20,13 @@ export const BlogHeader: React.FC<BlogHeaderProps> = ({
     localRenderName,
     activePath,
     isTocOpen,
+    viewMode,
+    canToggleView,
     theme,
     onToggleTheme,
     onToggleSidebar,
     onToggleToc,
+    onToggleViewMode,
     onDownload
 }) => {
     const currentTitle = localRenderName || (activePath ? activePath.split('/').pop() : 'Home');
@@ -49,6 +55,17 @@ export const BlogHeader: React.FC<BlogHeaderProps> = ({
 
                 {canShowTools && (
                     <>
+                        <button
+                            onClick={onToggleViewMode}
+                            title={viewMode === 'source' ? 'Switch to rendered mode' : 'Switch to source mode'}
+                            disabled={!canToggleView}
+                            className={`p-2 rounded-lg transition-colors hidden sm:block ${viewMode === 'source'
+                                ? 'text-primary-600 dark:text-primary-300 bg-primary-50 dark:bg-slate-800'
+                                : 'text-slate-400 dark:text-slate-300 hover:text-primary-600 hover:bg-primary-50 dark:hover:text-primary-400 dark:hover:bg-slate-800'
+                                } ${!canToggleView ? 'opacity-50 cursor-not-allowed' : ''}`}
+                        >
+                            {viewMode === 'source' ? <Eye size={20} /> : <Code2 size={20} />}
+                        </button>
                         <button onClick={onDownload} title="Download Markdown" className="p-2 text-slate-400 dark:text-slate-300 hover:text-primary-600 hover:bg-primary-50 dark:hover:text-primary-400 dark:hover:bg-slate-800 rounded-lg transition-colors hidden sm:block">
                             <Download size={20} />
                         </button>

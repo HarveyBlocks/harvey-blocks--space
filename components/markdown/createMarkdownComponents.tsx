@@ -40,10 +40,18 @@ export const createMarkdownComponents = ({
             return <DiagramRenderer code={rawCode.trim()} language={language as 'mermaid' | 'plantuml'} />;
         }
 
+        const normalizedCodeContent = React.isValidElement(codeContent)
+            ? React.cloneElement(codeContent as React.ReactElement<any>, {
+                className: ['hljs', (codeContent.props as any)?.className]
+                    .filter(Boolean)
+                    .join(' ')
+            })
+            : codeContent;
+
         return (
             <CodeBlock language={language} code={rawCode}>
                 <pre {...props} className="!bg-transparent !border-0 !shadow-none !m-0 !p-4 font-mono text-sm overflow-auto max-h-[600px] !text-slate-800 dark:!text-slate-100 !leading-relaxed">
-                    {codeContent}
+                    {normalizedCodeContent}
                 </pre>
             </CodeBlock>
         );
