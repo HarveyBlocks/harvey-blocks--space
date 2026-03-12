@@ -2,22 +2,26 @@ import React from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import remarkMath from 'remark-math';
-import remarkFlexibleToc, {type TocItem} from 'remark-flexible-toc';
-import {remarkAlert} from 'remark-github-blockquote-alert';
+import remarkSupersub from 'remark-supersub';
+import remarkFlexibleToc, { type TocItem } from 'remark-flexible-toc';
+import { remarkAlert } from 'remark-github-blockquote-alert';
 import rehypeKatex from 'rehype-katex';
 import rehypeHighlight from 'rehype-highlight';
 import rehypeRaw from 'rehype-raw';
 import rehypeSlug from 'rehype-slug';
-import {visit} from 'unist-util-visit';
-import {pandocMark} from 'micromark-extension-mark';
-import {pandocMarkFromMarkdown} from 'mdast-util-mark';
-import type {Plugin} from 'unified';
-import {useNavigate} from 'react-router-dom';
-import {ImageOff, Folder, FileText, ArrowLeft} from 'lucide-react';
-import {DiagramRenderer} from './DiagramRenderer';
-import {CodeBlock} from './CodeBlock';
-import {useState} from 'react';
-import {ImageViewer} from './ImageViewer';
+import { visit } from 'unist-util-visit';
+import { fromMarkdown } from 'mdast-util-from-markdown';
+import { gfm as micromarkGfm } from 'micromark-extension-gfm';
+import { gfmFromMarkdown } from 'mdast-util-gfm';
+import { pandocMark } from 'micromark-extension-mark';
+import { pandocMarkFromMarkdown } from 'mdast-util-mark';
+import type { Plugin } from 'unified';
+import { useNavigate } from 'react-router-dom';
+import { ImageOff, Folder, FileText, ArrowLeft } from 'lucide-react';
+import { DiagramRenderer } from './DiagramRenderer';
+import { CodeBlock } from './CodeBlock';
+import { useState } from 'react';
+import { ImageViewer } from './ImageViewer';
 
 /**
  * Helper to resolve relative paths
@@ -95,6 +99,103 @@ const remarkPandocMark: Plugin = function () {
     data.fromMarkdownExtensions.push(pandocMarkFromMarkdown);
 };
 
+const parseInlineMarkdown = (value: string) => {
+    const tree = fromMarkdown(value, {
+        extensions: [micromarkGfm(), pandocMark()],
+        mdastExtensions: [gfmFromMarkdown(), pandocMarkFromMarkdown]
+    });
+
+    const paragraph = tree.children.find((node: any) => node.type === 'paragraph');
+    if (paragraph && Array.isArray((paragraph as any).children)) {
+        return (paragraph as any).children;
+    }
+
+    return [{ type: 'text', value }];
+};
+
+const remarkSupersubInlineMix: Plugin = function () {
+    return (tree: any) => {
+        visit(tree, ['superscript', 'subscript'], (node: any) => {
+            if (!Array.isArray(node.children) || node.children.length === 0) return;
+
+            const allText = node.children.every((child: any) => child.type === 'text');
+            if (!allText) return;
+
+            const raw = node.children.map((child: any) => String(child.value || '')).join('');
+            if (!raw.trim()) return;
+
+            node.children = parseInlineMarkdown(raw);
+        });
+    };
+};
+
+const remarkSupersubAcrossNodes: Plugin = function () {
+    const delimiters: Array<'~' | '^'> = ['~', '^'];
+
+    const isTextNode = (node: any) => node && node.type === 'text' && typeof node.value === 'string';
+
+    const hasOpenDelimiterAtEnd = (value: string, delimiter: '~' | '^') =>
+        value.endsWith(delimiter) && !value.endsWith(`\\${delimiter}`);
+
+    const hasCloseDelimiterAtStart = (value: string, delimiter: '~' | '^') =>
+        value.startsWith(delimiter) && !value.startsWith(`\\${delimiter}`);
+
+    return (tree: any) => {
+        visit(tree, (node: any) => Array.isArray(node?.children), (parent: any) => {
+            if (!Array.isArray(parent.children) || parent.children.length < 3) return;
+
+            for (let i = 0; i < parent.children.length; i++) {
+                const openNode = parent.children[i];
+                if (!isTextNode(openNode)) continue;
+
+                for (const delimiter of delimiters) {
+                    const openValue = openNode.value as string;
+                    if (!hasOpenDelimiterAtEnd(openValue, delimiter)) continue;
+
+                    let closeIndex = -1;
+                    for (let j = i + 1; j < parent.children.length; j++) {
+                        const candidate = parent.children[j];
+                        if (!isTextNode(candidate)) continue;
+                        if (hasCloseDelimiterAtStart(candidate.value as string, delimiter)) {
+                            closeIndex = j;
+                            break;
+                        }
+                    }
+
+                    if (closeIndex === -1 || closeIndex <= i + 1) continue;
+
+                    const closeNode = parent.children[closeIndex];
+                    const innerNodes = parent.children.slice(i + 1, closeIndex);
+                    if (innerNodes.length === 0) continue;
+
+                    openNode.value = (openNode.value as string).slice(0, -1);
+                    closeNode.value = (closeNode.value as string).slice(1);
+
+                    const supersubNode = {
+                        type: delimiter === '^' ? 'superscript' : 'subscript',
+                        data: { hName: delimiter === '^' ? 'sup' : 'sub' },
+                        children: innerNodes
+                    };
+
+                    parent.children.splice(i + 1, closeIndex - i - 1, supersubNode);
+
+                    if (isTextNode(parent.children[i]) && (parent.children[i].value as string).length === 0) {
+                        parent.children.splice(i, 1);
+                        i -= 1;
+                    }
+
+                    const closeNodeNext = parent.children[i + 2];
+                    if (isTextNode(closeNodeNext) && (closeNodeNext.value as string).length === 0) {
+                        parent.children.splice(i + 2, 1);
+                    }
+
+                    break;
+                }
+            }
+        });
+    };
+};
+
 const TOC_HEADING_PATTERN = /^(toc|contents|table[ -]of[ -]contents)$/i;
 const TOC_INLINE_PATTERN = /^\[toc\]$/i;
 
@@ -122,7 +223,7 @@ const createTocListNode = (tocItems: TocItem[]) => {
                         {
                             type: 'link',
                             url: item.href,
-                            children: [{type: 'text', value: item.value}]
+                            children: [{ type: 'text', value: item.value }]
                         }
                     ]
                 }
@@ -134,7 +235,7 @@ const createTocListNode = (tocItems: TocItem[]) => {
 const createTocHeadingNode = (depth: number = 2) => ({
     type: 'heading',
     depth,
-    children: [{type: 'text', value: 'TOC'}]
+    children: [{ type: 'text', value: 'TOC' }]
 });
 
 const createRemarkInjectToc = (tocItems: TocItem[]): Plugin => function () {
@@ -189,9 +290,9 @@ const SafeImage: React.FC<{ src?: string; alt: string; onClick?: (src: string) =
     }
 
     return (
-        <img 
-            src={src} 
-            alt={alt} 
+        <img
+            src={src}
+            alt={alt}
             className="cursor-zoom-in max-w-full h-auto transition-transform hover:scale-[1.02]"
             onError={() => setHasError(true)}
             onClick={(e) => {
@@ -202,7 +303,7 @@ const SafeImage: React.FC<{ src?: string; alt: string; onClick?: (src: string) =
     );
 };
 
-export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({content, filePath, isFolder = false}) => {
+export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content, filePath, isFolder = false }) => {
     const navigate = useNavigate();
     const [viewerOpen, setViewerOpen] = useState(false);
     const [viewerContent, setViewerContent] = useState('');
@@ -216,7 +317,7 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({content, file
     };
 
     const components = {
-        h1: ({children, ...props}: any) => {
+        h1: ({ children, ...props }: any) => {
             if (isFolder) {
                 return (
                     <h1 {...props} className="flex items-center gap-2">
@@ -227,12 +328,12 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({content, file
             }
             return <h1 {...props}>{children}</h1>;
         },
-        img: ({src, alt, ...props}: any) => (
+        img: ({ src, alt, ...props }: any) => (
             <SafeImage src={src} alt={alt} onClick={handleImageClick} />
-       ),
-        pre: ({node, children, ...props}: any) => {
+        ),
+        pre: ({ node, children, ...props }: any) => {
             const childArray = React.Children.toArray(children);
-            
+
             // Find the code element to extract language and content
             // We look for a child that is either a 'code' element or has a language class
             const codeElement = childArray.find((child: any) => {
@@ -252,36 +353,36 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({content, file
                 // Robust regex to capture any non-whitespace language identifier
                 const match = /language-([^\s]+)/i.exec(className);
                 language = match ? match[1].toLowerCase() : '';
-                
+
                 // Helper to extract raw text
                 const getCodeText = (nodes: any): string => {
-                        if (!nodes) return '';
-                        if (typeof nodes === 'string') return nodes;
-                        if (Array.isArray(nodes)) return nodes.map(getCodeText).join('');
-                        if (React.isValidElement(nodes)) {
-                            return getCodeText((nodes as any).props.children);
-                        }
-                        // Type guard for object with children
-                        if (typeof nodes === 'object' && 'props' in nodes) {
-                            return getCodeText((nodes as any).props.children);
-                        }
-                        return '';
+                    if (!nodes) return '';
+                    if (typeof nodes === 'string') return nodes;
+                    if (Array.isArray(nodes)) return nodes.map(getCodeText).join('');
+                    if (React.isValidElement(nodes)) {
+                        return getCodeText((nodes as any).props.children);
+                    }
+                    // Type guard for object with children
+                    if (typeof nodes === 'object' && 'props' in nodes) {
+                        return getCodeText((nodes as any).props.children);
+                    }
+                    return '';
                 };
                 rawCode = getCodeText((codeElement.props as any).children);
             } else {
                 // Fallback: treat all children as raw text
-                 const getCodeText = (nodes: any): string => {
-                        if (!nodes) return '';
-                        if (typeof nodes === 'string') return nodes;
-                        if (Array.isArray(nodes)) return nodes.map(getCodeText).join('');
-                        if (React.isValidElement(nodes)) {
-                            return getCodeText((nodes as any).props.children);
-                        }
-                        // Type guard for object with children
-                        if (typeof nodes === 'object' && 'props' in nodes) {
-                             return getCodeText((nodes as any).props.children);
-                        }
-                        return '';
+                const getCodeText = (nodes: any): string => {
+                    if (!nodes) return '';
+                    if (typeof nodes === 'string') return nodes;
+                    if (Array.isArray(nodes)) return nodes.map(getCodeText).join('');
+                    if (React.isValidElement(nodes)) {
+                        return getCodeText((nodes as any).props.children);
+                    }
+                    // Type guard for object with children
+                    if (typeof nodes === 'object' && 'props' in nodes) {
+                        return getCodeText((nodes as any).props.children);
+                    }
+                    return '';
                 };
                 rawCode = getCodeText(children);
             }
@@ -300,7 +401,7 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({content, file
                 </CodeBlock>
             );
         },
-        code({node, inline, className, children, ...props}: any) {
+        code({ node, inline, className, children, ...props }: any) {
             // Simple code component that just renders the code
             // We rely on 'pre' to handle the block rendering and Diagram logic
             return (
@@ -309,10 +410,10 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({content, file
                 </code>
             );
         },
-        mark: ({children, ...props}: any) => (
+        mark: ({ children, ...props }: any) => (
             <mark {...props}>{children}</mark>
         ),
-        a: ({href, children, ...props}: any) => {
+        a: ({ href, children, ...props }: any) => {
             // 1. External Links
             // Note: We check for protocol. If it has a protocol, we treat it as external.
             if (!href || href.startsWith('http') || href.startsWith('https') || href.startsWith('mailto:')) {
@@ -335,7 +436,7 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({content, file
                     // Note: This is a bit brittle as it depends on the text content
                     // But for the generated folder view, it works.
                     const isParentFolder = children && Array.isArray(children) && children.some((c: any) => c?.props?.children === 'Back to parent');
-                    
+
                     if (isParentFolder) {
                         icon = <ArrowLeft size={18} className="inline mr-2 text-primary-500" />;
                     } else {
@@ -355,7 +456,7 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({content, file
                     const id = decodeURIComponent(href.slice(1));
                     const el = document.getElementById(id);
                     if (el) {
-                        el.scrollIntoView({behavior: 'smooth'});
+                        el.scrollIntoView({ behavior: 'smooth' });
                         // Update URL hash without jumping the page instantly
                         window.history.pushState(null, '', `#${id}`);
                     } else {
@@ -363,7 +464,7 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({content, file
                         const rawId = href.slice(1);
                         const rawEl = document.getElementById(rawId);
                         if (rawEl) {
-                            rawEl.scrollIntoView({behavior: 'smooth'});
+                            rawEl.scrollIntoView({ behavior: 'smooth' });
                             window.history.pushState(null, '', `#${rawId}`);
                         }
                     }
@@ -395,7 +496,7 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({content, file
             );
         },
         // Wrap tables in a div to handle overflow (responsiveness) while keeping margins managed by wrapper
-        table: ({children, ...props}: any) => (
+        table: ({ children, ...props }: any) => (
             <div className="overflow-x-auto my-6">
                 <table {...props}>
                     {children}
@@ -409,11 +510,14 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({content, file
         <div className="markdown-body">
             <ReactMarkdown
                 remarkPlugins={[
-                    remarkGfm,
+                    [remarkGfm, { singleTilde: false }],
                     remarkMath,
+                    remarkSupersubAcrossNodes,
+                    remarkSupersub,
                     remarkAlert,
                     remarkPandocMark,
-                    [remarkFlexibleToc, {tocRef, skipLevels: []}],
+                    remarkSupersubInlineMix,
+                    [remarkFlexibleToc, { tocRef, skipLevels: [] }],
                     createRemarkInjectToc(tocRef)
                 ]}
                 remarkRehypeOptions={{
@@ -427,15 +531,15 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({content, file
                     }
                 }}
                 rehypePlugins={[
-                    rehypeRaw, 
-                    [rehypeKatex, { 
-                        throwOnError: false, 
+                    rehypeRaw,
+                    [rehypeKatex, {
+                        throwOnError: false,
                         strict: (errorCode: string, errorMsg: string) => {
                             // console.error(`[LaTeX] Syntax ERROR: ${errorMsg}`);
                             return 'ignore';
                         }
-                    }], 
-                    rehypeHighlight, 
+                    }],
+                    rehypeHighlight,
                     rehypeSlug
                 ]}
                 components={components}
@@ -443,11 +547,11 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({content, file
                 {content}
             </ReactMarkdown>
 
-            <ImageViewer 
-                isOpen={viewerOpen} 
-                onClose={() => setViewerOpen(false)} 
-                content={viewerContent} 
-                type={viewerType} 
+            <ImageViewer
+                isOpen={viewerOpen}
+                onClose={() => setViewerOpen(false)}
+                content={viewerContent}
+                type={viewerType}
             />
         </div>
     );
