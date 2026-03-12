@@ -2,19 +2,22 @@ import React from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import remarkMath from 'remark-math';
+import remarkFlexibleToc, {type TocItem} from 'remark-flexible-toc';
+import {remarkAlert} from 'remark-github-blockquote-alert';
 import rehypeKatex from 'rehype-katex';
 import rehypeHighlight from 'rehype-highlight';
 import rehypeRaw from 'rehype-raw';
 import rehypeSlug from 'rehype-slug';
 import {visit} from 'unist-util-visit';
+import {pandocMark} from 'micromark-extension-mark';
+import {pandocMarkFromMarkdown} from 'mdast-util-mark';
+import type {Plugin} from 'unified';
 import {useNavigate} from 'react-router-dom';
-import {ImageOff, AlertCircle, Folder, FileText, ArrowLeft} from 'lucide-react';
+import {ImageOff, Folder, FileText, ArrowLeft} from 'lucide-react';
 import {DiagramRenderer} from './DiagramRenderer';
 import {CodeBlock} from './CodeBlock';
 import {useState} from 'react';
-import {TableOfContents} from './TableOfContents';
 import {ImageViewer} from './ImageViewer';
-import ReactDOMServer from 'react-dom/server';
 
 /**
  * Helper to resolve relative paths
@@ -79,65 +82,83 @@ const resolveRelativePath = (baseFile: string, relativeUrl: string, isFolder: bo
     return baseDirParts.join('/') + hashPart;
 };
 
-/**
- * Custom Remark plugin to handle ==text== highlighting.
- */
-function visitorFactory(supMark: string, supHtmlTag: string) {
-    let inMark = false;
-    return (node: any, index: number | undefined, parent: any) => {
-        const value: string = node.value;
-        let preIndex = 0;
-        const newNodes = [];
-        while (true) {
-            const markIndex = value.indexOf(supMark, preIndex);
-            if (markIndex === -1) break;
-            const text = value.slice(preIndex, markIndex);
-            if (text.length > 0) {
-                if (inMark) {
-                    newNodes.push({type: 'html', value: `<${supHtmlTag}>${text}</${supHtmlTag}>`});
-                } else {
-                    newNodes.push({type: 'text', value: text});
+const remarkPandocMark: Plugin = function () {
+    const data = this.data() as {
+        micromarkExtensions?: unknown[];
+        fromMarkdownExtensions?: unknown[];
+    };
+
+    if (!data.micromarkExtensions) data.micromarkExtensions = [];
+    if (!data.fromMarkdownExtensions) data.fromMarkdownExtensions = [];
+
+    data.micromarkExtensions.push(pandocMark());
+    data.fromMarkdownExtensions.push(pandocMarkFromMarkdown);
+};
+
+const TOC_HEADING_PATTERN = /^(toc|contents|table[ -]of[ -]contents)$/i;
+const TOC_INLINE_PATTERN = /^\[toc\]$/i;
+
+const getNodeText = (node: any): string => {
+    if (!node) return '';
+    if (node.type === 'text') return String(node.value || '');
+    if (!Array.isArray(node.children)) return '';
+    return node.children.map(getNodeText).join('');
+};
+
+const createTocListNode = (tocItems: TocItem[]) => {
+    const filtered = tocItems.filter((item) => !TOC_HEADING_PATTERN.test(item.value.trim()));
+
+    return {
+        type: 'list',
+        ordered: false,
+        spread: false,
+        children: filtered.map((item) => ({
+            type: 'listItem',
+            spread: false,
+            children: [
+                {
+                    type: 'paragraph',
+                    children: [
+                        {
+                            type: 'link',
+                            url: item.href,
+                            children: [{type: 'text', value: item.value}]
+                        }
+                    ]
+                }
+            ]
+        }))
+    };
+};
+
+const createTocHeadingNode = (depth: number = 2) => ({
+    type: 'heading',
+    depth,
+    children: [{type: 'text', value: 'TOC'}]
+});
+
+const createRemarkInjectToc = (tocItems: TocItem[]): Plugin => function () {
+    return (tree: any) => {
+        visit(tree, 'root', (root: any) => {
+            if (!Array.isArray(root.children)) return;
+
+            for (let i = 0; i < root.children.length; i++) {
+                const node = root.children[i];
+
+                if (node.type === 'paragraph' && TOC_INLINE_PATTERN.test(getNodeText(node).trim())) {
+                    root.children.splice(i, 1, createTocHeadingNode(2), createTocListNode(tocItems));
+                    i += 1;
+                    continue;
+                }
+
+                if (node.type === 'heading' && TOC_HEADING_PATTERN.test(getNodeText(node).trim())) {
+                    const nextNode = root.children[i + 1];
+                    if (!nextNode || nextNode.type !== 'list') {
+                        root.children.splice(i + 1, 0, createTocListNode(tocItems));
+                    }
                 }
             }
-            inMark = !inMark;
-            preIndex = markIndex + supMark.length;
-        }
-        const text = value.slice(preIndex);
-        if (text.length > 0) {
-            if (inMark) {
-                newNodes.push({type: 'html', value: `<${supHtmlTag}>${text}</${supHtmlTag}>`});
-            } else {
-                newNodes.push({type: 'text', value: text});
-            }
-        }
-        if (parent && index !== undefined) {
-            parent.children.splice(index, 1, ...newNodes);
-            return index + newNodes.length;
-        }
-    };
-}
-
-const remarkMark: () => (tree: any) => void = (): (any) => void => {
-    return (tree: any): void => {
-        // 1. Define prefix and suffix
-        let visitor = visitorFactory('==', 'mark');
-        visit(tree, 'text', visitor);
-    };
-};
-
-const remarkSup: () => (tree: any) => void = (): (any) => void => {
-    return (tree: any): void => {
-        // 1. Define prefix and suffix
-        let visitor = visitorFactory('^', 'sup');
-        visit(tree, 'text', visitor);
-    };
-};
-
-const remarkDel: () => (tree: any) => void = (): (any) => void => {
-    return (tree: any): void => {
-        // 1. Define prefix and suffix
-        let visitor = visitorFactory('~~', 'del');
-        visit(tree, 'text', visitor);
+        });
     };
 };
 
@@ -159,11 +180,11 @@ const SafeImage: React.FC<{ src?: string; alt: string; onClick?: (src: string) =
 
     if (hasError) {
         return (
-            <div className="flex flex-col items-center justify-center p-8 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-400 dark:text-slate-500 my-4">
+            <span className="flex flex-col items-center justify-center p-8 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-400 dark:text-slate-500 my-4">
                 <ImageOff size={48} className="mb-2 opacity-50" />
                 <span className="text-sm font-medium">Image failed to load</span>
                 {alt && <span className="text-xs mt-1 italic">"{alt}"</span>}
-            </div>
+            </span>
         );
     }
 
@@ -186,6 +207,7 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({content, file
     const [viewerOpen, setViewerOpen] = useState(false);
     const [viewerContent, setViewerContent] = useState('');
     const [viewerType, setViewerType] = useState<'image' | 'svg'>('image');
+    const tocRef: TocItem[] = [];
 
     const handleImageClick = (src: string) => {
         setViewerContent(src);
@@ -208,12 +230,6 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({content, file
         img: ({src, alt, ...props}: any) => (
             <SafeImage src={src} alt={alt} onClick={handleImageClick} />
        ),
-        p: ({children, ...props}: any) => {
-            if (typeof children === 'string' && children.trim().toUpperCase() === '[TOC]') {
-                return <TableOfContents content={content} />;
-            }
-            return <p {...props}>{children}</p>;
-        },
         pre: ({node, children, ...props}: any) => {
             const childArray = React.Children.toArray(children);
             
@@ -293,6 +309,9 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({content, file
                 </code>
             );
         },
+        mark: ({children, ...props}: any) => (
+            <mark {...props}>{children}</mark>
+        ),
         a: ({href, children, ...props}: any) => {
             // 1. External Links
             // Note: We check for protocol. If it has a protocol, we treat it as external.
@@ -389,7 +408,24 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({content, file
         // Removed custom id="write" to rely purely on standard class
         <div className="markdown-body">
             <ReactMarkdown
-                remarkPlugins={[remarkGfm, remarkMath, remarkMark, remarkDel, remarkSup]}
+                remarkPlugins={[
+                    remarkGfm,
+                    remarkMath,
+                    remarkAlert,
+                    remarkPandocMark,
+                    [remarkFlexibleToc, {tocRef, skipLevels: []}],
+                    createRemarkInjectToc(tocRef)
+                ]}
+                remarkRehypeOptions={{
+                    handlers: {
+                        mark: (state: any, node: any) => ({
+                            type: 'element',
+                            tagName: 'mark',
+                            properties: {},
+                            children: state.all(node)
+                        })
+                    }
+                }}
                 rehypePlugins={[
                     rehypeRaw, 
                     [rehypeKatex, { 

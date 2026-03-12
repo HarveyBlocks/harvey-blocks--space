@@ -276,3 +276,17 @@
     background-color: #450a0a !important;
     border-color: #7f1d1d !important;
 }
+
+.dark .markdown-alert {
+    --color-border-default: #30363d;
+    --color-accent-fg: #58a6ff;
+    --color-accent-emphasis: #1f6feb;
+    --color-danger-fg: #f85149;
+    --color-danger-emphasis: #da3633;
+    --color-attention-fg: #d29922;
+    --color-attention-emphasis: #9e6a03;
+    --color-done-fg: #a371f7;
+    --color-done-emphasis: #8957e5;
+    --color-success-fg: #3fb950;
+    --color-success-emphasis: #238636;
+}
