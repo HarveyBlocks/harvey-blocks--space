@@ -55,15 +55,15 @@ export const FileTreeItem: React.FC<TreeItemProps> = ({
         onClick={handleSelect}
         className={`
           group flex items-center py-2 pr-3 text-sm cursor-pointer transition-colors duration-200 ease-in-out
-          ${isSelected ? 'bg-primary-50 text-primary-700 font-medium border-r-4 border-primary-500' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900 border-r-4 border-transparent'}
+          ${isSelected ? 'bg-primary-50 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300 font-medium border-r-4 border-primary-500' : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-100 border-r-4 border-transparent'}
         `}
         style={{ paddingLeft }}
       >
         <span className="mr-2 opacity-70 group-hover:opacity-100 transition-opacity">
           {isFolder ? (
-            isOpen ? <FolderOpen size={16} className="text-primary-500" /> : <Folder size={16} className="text-slate-400" />
+            isOpen ? <FolderOpen size={16} className="text-primary-500 dark:text-primary-300" /> : <Folder size={16} className="text-slate-400 dark:text-slate-500" />
           ) : (
-            <FileText size={16} className={isSelected ? 'text-primary-500' : 'text-slate-400'} />
+            <FileText size={16} className={isSelected ? 'text-primary-500 dark:text-primary-300' : 'text-slate-400 dark:text-slate-500'} />
           )}
         </span>
         
@@ -73,7 +73,7 @@ export const FileTreeItem: React.FC<TreeItemProps> = ({
 
         {isFolder && (
           <span 
-            className="ml-auto opacity-50 p-1 hover:bg-slate-200 rounded"
+            className="ml-auto opacity-50 p-1 hover:bg-slate-200 dark:hover:bg-slate-700 rounded"
             onClick={handleToggle}
           >
             {isOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}

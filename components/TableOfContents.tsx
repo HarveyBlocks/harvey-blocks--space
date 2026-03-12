@@ -57,7 +57,7 @@ export const TableOfContents: React.FC<TableOfContentsProps> = ({ content, class
 
   return (
     <nav className={`my-8 ${className}`}>
-      <h3 className="text-xl font-bold text-gray-900 mb-4 px-2">
+      <h3 className="text-xl font-bold text-gray-900 dark:text-slate-100 mb-4 px-2">
         Table of Contents
       </h3>
       <div className="flex flex-col space-y-1">
@@ -75,10 +75,10 @@ export const TableOfContents: React.FC<TableOfContentsProps> = ({ content, class
             }}
             className={`
               block py-1.5 pr-4 rounded-md transition-colors duration-200
-              hover:bg-gray-100 hover:text-teal-700
-              ${heading.level === 1 ? 'font-semibold text-gray-800 text-base' : ''}
-              ${heading.level === 2 ? 'font-medium text-gray-700 text-[15px]' : ''}
-              ${heading.level >= 3 ? 'text-gray-500 text-sm' : ''}
+              hover:bg-gray-100 dark:hover:bg-slate-800 hover:text-teal-700 dark:hover:text-teal-300
+              ${heading.level === 1 ? 'font-semibold text-gray-800 dark:text-slate-200 text-base' : ''}
+              ${heading.level === 2 ? 'font-medium text-gray-700 dark:text-slate-300 text-[15px]' : ''}
+              ${heading.level >= 3 ? 'text-gray-500 dark:text-slate-500 text-sm' : ''}
             `}
             style={{
               paddingLeft: `${(heading.level - 1) * 1.25 + 0.5}rem`

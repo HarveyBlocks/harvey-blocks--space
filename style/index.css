@@ -17,6 +17,14 @@
     background: #94a3b8;
 }
 
+.dark ::-webkit-scrollbar-thumb {
+    background: #334155;
+}
+
+.dark ::-webkit-scrollbar-thumb:hover {
+    background: #475569;
+}
+
 /* KaTeX adjustments */
 .katex-display {
     overflow-x: auto;

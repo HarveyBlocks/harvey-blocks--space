@@ -159,7 +159,7 @@ const SafeImage: React.FC<{ src?: string; alt: string; onClick?: (src: string) =
 
     if (hasError) {
         return (
-            <div className="flex flex-col items-center justify-center p-8 bg-slate-50 border border-slate-200 rounded-lg text-slate-400 my-4">
+            <div className="flex flex-col items-center justify-center p-8 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-400 dark:text-slate-500 my-4">
                 <ImageOff size={48} className="mb-2 opacity-50" />
                 <span className="text-sm font-medium">Image failed to load</span>
                 {alt && <span className="text-xs mt-1 italic">"{alt}"</span>}
@@ -278,7 +278,7 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({content, file
             // Standard Code Block
             return (
                 <CodeBlock language={language} code={rawCode}>
-                    <pre {...props} className="!bg-transparent !border-0 !shadow-none !m-0 !p-4 font-mono text-sm overflow-auto max-h-[600px] !text-slate-800 !leading-relaxed">
+                    <pre {...props} className="!bg-transparent !border-0 !shadow-none !m-0 !p-4 font-mono text-sm overflow-auto max-h-[600px] !text-slate-800 dark:!text-slate-100 !leading-relaxed">
                         {codeContent}
                     </pre>
                 </CodeBlock>
@@ -323,7 +323,7 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({content, file
                         // For other links in folder view, we assume they are children
                         // We'll use FileText for files and maybe detect folders if possible
                         // In App.tsx we didn't pass enough info, but we can check if it looks like a file
-                        icon = <FileText size={18} className="inline mr-2 text-slate-400" />;
+                        icon = <FileText size={18} className="inline mr-2 text-slate-400 dark:text-slate-500" />;
                     }
                 }
             }

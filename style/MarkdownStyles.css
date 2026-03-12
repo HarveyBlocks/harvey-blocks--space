@@ -200,3 +200,79 @@
     padding: 0.1em 0.3em;
     border-radius: 0.25rem;
 }
+
+/* Dark mode overrides */
+.dark .markdown-body {
+    color: #cbd5e1 !important;
+}
+
+.dark .markdown-body h1,
+.dark .markdown-body h2,
+.dark .markdown-body h3,
+.dark .markdown-body h4,
+.dark .markdown-body h5,
+.dark .markdown-body h6 {
+    color: #f8fafc !important;
+}
+
+.dark .markdown-body h1 {
+    border-bottom: 1px solid #334155 !important;
+}
+
+.dark .markdown-body a {
+    color: #5eead4 !important;
+}
+
+.dark .markdown-body a:hover {
+    color: #99f6e4 !important;
+}
+
+.dark .markdown-body blockquote {
+    color: #cbd5e1 !important;
+    border-left-color: #2dd4bf !important;
+    background: #0f2d2b !important;
+}
+
+.dark .markdown-body li {
+    color: #cbd5e1 !important;
+}
+
+.dark .markdown-body :not(pre) > code {
+    background-color: #1e293b !important;
+    color: #f9a8d4 !important;
+    border: 1px solid #334155 !important;
+}
+
+.dark .markdown-body table {
+    border-color: #334155 !important;
+    box-shadow: none !important;
+}
+
+.dark .markdown-body table tr {
+    background-color: #0f172a !important;
+    border-top: 1px solid #334155 !important;
+}
+
+.dark .markdown-body table tr:nth-child(2n) {
+    background-color: #111c2f !important;
+}
+
+.dark .markdown-body table th,
+.dark .markdown-body table td {
+    border: 1px solid #334155 !important;
+}
+
+.dark .markdown-body table th {
+    background-color: #1e293b !important;
+    color: #e2e8f0 !important;
+}
+
+.dark .markdown-body hr {
+    background-color: #334155 !important;
+}
+
+.dark .katex-error {
+    color: #fecaca !important;
+    background-color: #450a0a !important;
+    border-color: #7f1d1d !important;
+}

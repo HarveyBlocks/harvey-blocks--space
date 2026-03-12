@@ -1,6 +1,6 @@
 import React, {useEffect, useState, useCallback, useMemo} from 'react';
 import {BrowserRouter, MemoryRouter, Routes, Route, useLocation, useNavigate} from 'react-router-dom';
-import {Menu, X, BookOpen, Github, Download, List, FolderTree, Folder, FileText, ArrowLeft} from 'lucide-react';
+import {Menu, X, BookOpen, Github, Download, List, FolderTree, FileText, Moon, Sun} from 'lucide-react';
 import {fetchFileTree, fetchMarkdownContent, findNodeByPath, BLOG_REPO_URL} from './services/blogService';
 import {FileNode} from './types';
 import {FileTreeItem} from './components/FileTree';
@@ -21,6 +21,14 @@ const BlogApp: React.FC = () => {
 
     const [isSidebarOpen, setIsSidebarOpen] = useState(true);
     const [isTocOpen, setIsTocOpen] = useState(true);
+    const [theme, setTheme] = useState<'light' | 'dark'>(() => {
+        if (typeof window === 'undefined') return 'light';
+        const savedTheme = localStorage.getItem('theme');
+        if (savedTheme === 'light' || savedTheme === 'dark') {
+            return savedTheme;
+        }
+        return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+    });
 
     const location = useLocation();
     const navigate = useNavigate();
@@ -57,6 +65,29 @@ const BlogApp: React.FC = () => {
         handleResize();
         window.addEventListener('resize', handleResize);
         return () => window.removeEventListener('resize', handleResize);
+    }, []);
+
+    useEffect(() => {
+        const root = document.documentElement;
+        if (theme === 'dark') {
+            root.classList.add('dark');
+        } else {
+            root.classList.remove('dark');
+        }
+        localStorage.setItem('theme', theme);
+    }, [theme]);
+
+    useEffect(() => {
+        const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+        const handleChange = (event: MediaQueryListEvent) => {
+            const savedTheme = localStorage.getItem('theme');
+            if (savedTheme !== 'light' && savedTheme !== 'dark') {
+                setTheme(event.matches ? 'dark' : 'light');
+            }
+        };
+
+        mediaQuery.addEventListener('change', handleChange);
+        return () => mediaQuery.removeEventListener('change', handleChange);
     }, []);
 
     // 2. Fetch Tree
@@ -214,7 +245,7 @@ const BlogApp: React.FC = () => {
     };
 
     return (
-        <div className="flex h-screen overflow-hidden bg-slate-50 text-slate-900 font-sans">
+        <div className="flex h-screen overflow-hidden bg-slate-50 text-slate-900 font-sans dark:bg-slate-950 dark:text-slate-100">
 
             {/* Mobile Sidebar Overlay */}
             {isSidebarOpen && (
@@ -228,22 +259,22 @@ const BlogApp: React.FC = () => {
             <aside
                 className={`
           fixed lg:static inset-y-0 left-0 z-30
-          w-72 bg-white border-r border-slate-200 shadow-xl lg:shadow-none
+          w-72 bg-white border-r border-slate-200 shadow-xl lg:shadow-none dark:bg-slate-900 dark:border-slate-800
           transform transition-transform duration-300 ease-in-out flex flex-col
           ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0 lg:w-0 lg:border-none lg:overflow-hidden'}
         `}
             >
-                <div className="p-6 border-b border-slate-100 flex items-center justify-between">
+                <div className="p-6 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
                     <div className="flex items-center gap-3">
                         <div
-                            className="p-2 bg-primary-100 rounded-lg text-primary-700 cursor-pointer"
+                            className="p-2 bg-primary-100 dark:bg-primary-900/40 rounded-lg text-primary-700 dark:text-primary-300 cursor-pointer"
                             onClick={handleHomeClick}
                         >
                             <BookOpen size={20}/>
                         </div>
                         {/* Added border-none and font-sans to override potentially conflicting github.css globals */}
                         <h1
-                            className="font-bold text-lg tracking-tight text-slate-800 cursor-pointer border-none font-sans"
+                            className="font-bold text-lg tracking-tight text-slate-800 dark:text-slate-100 cursor-pointer border-none font-sans"
                             onClick={handleHomeClick}
                         >
                             Harvey Blocks' Space
@@ -251,7 +282,7 @@ const BlogApp: React.FC = () => {
                     </div>
                     <button
                         onClick={toggleSidebar}
-                        className="lg:hidden p-2 text-slate-400 hover:text-slate-600 rounded-md hover:bg-slate-100"
+                        className="lg:hidden p-2 text-slate-400 hover:text-slate-600 dark:text-slate-500 dark:hover:text-slate-200 rounded-md hover:bg-slate-100 dark:hover:bg-slate-800"
                     >
                         <X size={20}/>
                     </button>
@@ -280,13 +311,13 @@ const BlogApp: React.FC = () => {
                                 />
                             ))}
                             {tree.length === 0 && (
-                                <p className="px-6 text-sm text-slate-400 italic">No files found.</p>
+                                <p className="px-6 text-sm text-slate-400 dark:text-slate-500 italic">No files found.</p>
                             )}
                         </div>
                     )}
                 </div>
 
-                <div className="p-4 border-t border-slate-100 text-xs text-slate-400 text-center">
+                <div className="p-4 border-t border-slate-100 dark:border-slate-800 text-xs text-slate-400 dark:text-slate-500 text-center">
                     <p>Powered by React & Tailwind</p>
                 </div>
             </aside>
@@ -294,19 +325,19 @@ const BlogApp: React.FC = () => {
             {/* Main Content Area */}
             <main className="flex-1 flex flex-col h-full overflow-hidden relative">
                 <header
-                    className="bg-white/80 backdrop-blur-md border-b border-slate-200 h-16 flex items-center px-4 lg:px-8 justify-between sticky top-0 z-10 shrink-0">
+                    className="bg-white/80 dark:bg-slate-900/85 backdrop-blur-md border-b border-slate-200 dark:border-slate-800 h-16 flex items-center px-4 lg:px-8 justify-between sticky top-0 z-10 shrink-0">
                     <div className="flex items-center gap-4">
                         <button
                             onClick={toggleSidebar}
-                            className="p-2 -ml-2 text-slate-500 hover:text-primary-600 hover:bg-primary-50 rounded-lg transition-colors"
+                            className="p-2 -ml-2 text-slate-500 dark:text-slate-300 hover:text-primary-600 hover:bg-primary-50 dark:hover:bg-slate-800 rounded-lg transition-colors"
                         >
                             <Menu size={24}/>
                         </button>
                         <div className="flex flex-col">
-                            <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
+                            <span className="text-xs font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider">
                                 {localRenderInfo ? 'Viewing Local File' : 'Currently Reading'}
                             </span>
-                            <h2 className="text-sm font-medium text-slate-700 truncate max-w-[200px] sm:max-w-md"
+                            <h2 className="text-sm font-medium text-slate-700 dark:text-slate-200 truncate max-w-[200px] sm:max-w-md"
                                 style={{margin: "2px"}}>
                                 {localRenderInfo ? localRenderInfo.name : (activePath ? activePath.split('/').pop() : 'Home')}
                             </h2>
@@ -314,19 +345,26 @@ const BlogApp: React.FC = () => {
                     </div>
 
                     <div className="flex items-center gap-2">
+                        <button
+                            onClick={() => setTheme(prev => prev === 'dark' ? 'light' : 'dark')}
+                            title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+                            className="p-2 text-slate-400 hover:text-primary-600 hover:bg-primary-50 dark:text-slate-300 dark:hover:text-primary-400 dark:hover:bg-slate-800 rounded-lg transition-colors"
+                        >
+                            {theme === 'dark' ? <Sun size={20}/> : <Moon size={20}/>}
+                        </button>
                         {((activePath && !['source_tree', 'local-render'].includes(activePath)) || localRenderInfo) && (
                             <>
                                 <button
                                     onClick={handleDownload}
                                     title="Download Markdown"
-                                    className="p-2 text-slate-400 hover:text-primary-600 hover:bg-primary-50 rounded-lg transition-colors hidden sm:block"
+                                    className="p-2 text-slate-400 dark:text-slate-300 hover:text-primary-600 hover:bg-primary-50 dark:hover:text-primary-400 dark:hover:bg-slate-800 rounded-lg transition-colors hidden sm:block"
                                 >
                                     <Download size={20}/>
                                 </button>
                                 <button
                                     onClick={toggleToc}
                                     title={isTocOpen ? "Hide Directory" : "Show Directory"}
-                                    className={`p-2 rounded-lg transition-colors hidden lg:block ${isTocOpen ? 'text-primary-600 bg-primary-50' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-100'}`}
+                                    className={`p-2 rounded-lg transition-colors hidden lg:block ${isTocOpen ? 'text-primary-600 bg-primary-50 dark:text-primary-300 dark:bg-slate-800' : 'text-slate-400 dark:text-slate-300 hover:text-slate-600 dark:hover:text-slate-100 hover:bg-slate-100 dark:hover:bg-slate-800'}`}
                                 >
                                     <List size={20}/>
                                 </button>
@@ -337,7 +375,7 @@ const BlogApp: React.FC = () => {
                             target="_blank"
                             rel="noreferrer"
                             title="Visit Repository"
-                            className="p-2 text-slate-400 hover:text-slate-800 hover:bg-slate-100 rounded-lg transition-colors"
+                            className="p-2 text-slate-400 dark:text-slate-300 hover:text-slate-800 dark:hover:text-slate-100 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors"
                         >
                             <Github size={20}/>
                         </a>
@@ -358,18 +396,18 @@ const BlogApp: React.FC = () => {
                             ) : !activePath ? (
                                 <div className="flex flex-col items-center justify-center h-[60vh] text-center px-4">
                                     <div
-                                        className="w-20 h-20 bg-primary-50 rounded-full flex items-center justify-center mb-6 text-primary-300">
+                                        className="w-20 h-20 bg-primary-50 dark:bg-primary-900/30 rounded-full flex items-center justify-center mb-6 text-primary-300 dark:text-primary-400">
                                         <BookOpen size={40}/>
                                     </div>
-                                    <h2 className="text-2xl font-bold text-slate-800 mb-2">Welcome to Harvey Blocks'
+                                    <h2 className="text-2xl font-bold text-slate-800 dark:text-slate-100 mb-2">Welcome to Harvey Blocks'
                                         Space</h2>
-                                    <p className="text-slate-500 max-w-md mb-8">
+                                    <p className="text-slate-500 dark:text-slate-400 max-w-md mb-8">
                                         Select a document from the sidebar to explore Harvey's thoughts.
                                     </p>
                                     <div className="flex flex-col sm:flex-row gap-4">
                                         <button
                                             onClick={() => navigate('/source_tree')}
-                                            className="flex items-center gap-2 px-6 py-3 bg-white border border-slate-200 text-slate-700 rounded-lg hover:border-primary-300 hover:text-primary-600 hover:shadow-md transition-all duration-200 group"
+                                            className="flex items-center gap-2 px-6 py-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 rounded-lg hover:border-primary-300 hover:text-primary-600 dark:hover:text-primary-300 hover:shadow-md transition-all duration-200 group"
                                         >
                                             <FolderTree size={20}
                                                         className="text-slate-400 group-hover:text-primary-500 transition-colors"/>
@@ -381,13 +419,13 @@ const BlogApp: React.FC = () => {
                                                 setLocalRenderInfo({ content, name });
                                                 navigate('/local-render');
                                             }}
-                                            className="flex items-center gap-2 px-6 py-3 bg-white border border-slate-200 text-slate-700 rounded-lg hover:border-primary-300 hover:text-primary-600 hover:shadow-md transition-all duration-200 group w-full sm:w-auto"
+                                            className="flex items-center gap-2 px-6 py-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 rounded-lg hover:border-primary-300 hover:text-primary-600 dark:hover:text-primary-300 hover:shadow-md transition-all duration-200 group w-full sm:w-auto"
                                         >
                                             <FileText size={20} className="text-slate-400 group-hover:text-primary-500 transition-colors" />
                                             <span className="font-medium">Render Local Markdown</span>
                                         </LocalMarkdownHandler>
                                     </div>
-                                    <p className="mt-4 text-xs text-slate-400">
+                                    <p className="mt-4 text-xs text-slate-400 dark:text-slate-500">
                                         Or choose a local file to preview it instantly here.
                                     </p>
                                 </div>
@@ -408,7 +446,7 @@ const BlogApp: React.FC = () => {
 
                     {/* Right TOC Sidebar */}
                     {((activePath && !['source_tree', 'local-render'].includes(activePath) && markdownContent && !isCurrentPathFolder) || (localRenderInfo && activePath === 'local-render')) && isTocOpen && (
-                        <div className="w-64 flex-shrink-0 border-l border-slate-200 bg-slate-50/50 hidden lg:block overflow-y-auto h-full">
+                        <div className="w-64 flex-shrink-0 border-l border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50 hidden lg:block overflow-y-auto h-full">
                             <div className="p-4">
                                 <TableOfContents content={localRenderInfo ? localRenderInfo.content : (markdownContent || '')}/>
                             </div>

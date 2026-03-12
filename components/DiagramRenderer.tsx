@@ -222,9 +222,9 @@ export const DiagramRenderer: React.FC<DiagramRendererProps> = ({ code, language
             onDownload={handleDownload}
         >
             {isPreview ? (
-                <div className="p-4 flex justify-center overflow-auto w-full min-h-[100px] max-h-[500px] bg-white">
+                <div className="p-4 flex justify-center overflow-auto w-full min-h-[100px] max-h-[500px] bg-white dark:bg-slate-900">
                     {loading ? (
-                        <div className="flex flex-col items-center justify-center py-8 text-gray-400 animate-pulse">
+                        <div className="flex flex-col items-center justify-center py-8 text-gray-400 dark:text-slate-500 animate-pulse">
                             <Loader2 className="animate-spin mb-2" size={24} />
                             <span className="text-sm">Rendering...</span>
                         </div>
@@ -235,13 +235,13 @@ export const DiagramRenderer: React.FC<DiagramRendererProps> = ({ code, language
                                     <AlertTriangle size={18} className="text-red-600" />
                                     <span>{language} Syntax Error</span>
                                 </div>
-                                <pre className="whitespace-pre-wrap font-mono text-xs overflow-x-auto bg-white/60 p-3 rounded-md border border-red-100/50 leading-relaxed">{error}</pre>
+                                <pre className="whitespace-pre-wrap font-mono text-xs overflow-x-auto bg-white/60 dark:bg-slate-900/60 p-3 rounded-md border border-red-100/50 dark:border-red-900/40 leading-relaxed">{error}</pre>
                             </div>
                             
                             {/* If Mermaid generated an error SVG, show it here but constrained */}
                             {language === 'mermaid' && content && (
                                 <div 
-                                    className="mermaid-error-svg w-full flex justify-center overflow-hidden border border-slate-200 rounded-lg bg-slate-50/50 p-4 shadow-inner"
+                                    className="mermaid-error-svg w-full flex justify-center overflow-hidden border border-slate-200 dark:border-slate-700 rounded-lg bg-slate-50/50 dark:bg-slate-900/40 p-4 shadow-inner"
                                     dangerouslySetInnerHTML={{ __html: content }} 
                                 />
                             )}
@@ -257,8 +257,8 @@ export const DiagramRenderer: React.FC<DiagramRendererProps> = ({ code, language
                     )}
                 </div>
             ) : (
-                <div className="bg-[#f6f8fa] p-4">
-                    <pre className="font-mono text-sm overflow-auto max-h-[600px] text-slate-800 leading-relaxed m-0">
+                <div className="bg-[#f6f8fa] dark:bg-slate-950 p-4">
+                    <pre className="font-mono text-sm overflow-auto max-h-[600px] text-slate-800 dark:text-slate-100 leading-relaxed m-0">
                         <code>{code}</code>
                     </pre>
                 </div>
