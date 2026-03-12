@@ -13,7 +13,9 @@
       (function(l) {
         // 1. Calculate project root (e.g., /personal-space/)
         var segments = l.pathname.split('/').filter(Boolean);
-        var repoName = segments[0] || '';
+        // The first segment is likely the project name, but skip common files
+        var firstSegment = segments[0] || '';
+        var repoName = (firstSegment && !firstSegment.match(/\.(html|php|js|css)$/)) ? firstSegment : '';
         var repoRoot = '/' + repoName + (repoName ? '/' : '');
 
         // 2. Fix asset loading BEFORE anything is parsed

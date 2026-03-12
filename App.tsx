@@ -431,8 +431,10 @@ const App: React.FC = () => {
         const path = window.location.pathname;
         const segments = path.split('/').filter(Boolean);
         
-        // Return first segment as project root (e.g., /project-name)
-        return segments.length > 0 ? '/' + segments[0] : '/';
+        // Return first segment as project root if it's not a common file
+        const firstSegment = segments[0] || '';
+        const repoName = (firstSegment && !firstSegment.match(/\.(html|php|js|css)$/)) ? firstSegment : '';
+        return repoName ? '/' + repoName : '/';
     }, []);
 
     return (

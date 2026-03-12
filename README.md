@@ -1,20 +1,19 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
-</div>
+# Harvey Blocks' Space
 
-# Run and deploy your AI Studio app
-
-This contains everything you need to run your app locally.
-
-View your app in AI Studio: https://ai.studio/apps/drive/17UgwVt_VWb7QfDSs1vtyz-C_VPIlEyeH
+A clean and modern personal space for hosting and rendering markdown-based content directly from GitHub.
 
 ## Run Locally
 
-**Prerequisites:**  Node.js
-
+**Prerequisites:** Node.js
 
 1. Install dependencies:
    `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
+2. Run the app:
    `npm run dev`
+
+## Features
+
+- **GitHub Pages Ready**: Optimized for multi-project hosting on GitHub Pages.
+- **Markdown Rendering**: High-quality markdown rendering with support for GFM, Math (KaTeX), and Syntax Highlighting.
+- **Dynamic File Tree**: Automatically fetches and displays file structure from your content repository.
+- **Responsive Design**: Built with Tailwind CSS for a seamless experience across all devices.
